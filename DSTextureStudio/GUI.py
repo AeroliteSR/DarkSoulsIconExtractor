@@ -92,15 +92,19 @@ class Palettes():
     }
 
     QListWidget::item {
-        color: white;
         border: none;
         padding: 0px 8px 0px 8px; /* top right bottom left */
         border-radius: 4px;
     }
 
+    QListWidget::item:hover {
+        background-color: #3A3A3A;
+        border-radius: 4px;
+        margin: 2px 2px 2px 0px; /* top right bottom left */
+    }
+
     QListWidget::item:selected {
-        background: #393939;
-        color: white;
+        background-color: #393939;
         padding: 0px 10px 0px 10px; /* top right bottom left */
 
         background: qlineargradient(
@@ -110,8 +114,8 @@ class Palettes():
             stop:0.015  #2AA8FF,
             stop:0.022  #2AA8FF,
             stop:0.023  transparent,
-            stop:0.05   #3A3A3A,
-            stop:1      #3A3A3A
+            stop:0.05   #464646,
+            stop:1      #464646
         );
 
         border-radius: 4px;
@@ -121,7 +125,6 @@ class Palettes():
     QListWidget::item:focus {
         outline: none;
         border-radius: 4px;
-
     }
 
     QListWidget QScrollBar:vertical {

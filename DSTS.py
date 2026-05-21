@@ -8,8 +8,8 @@ from PIL import Image, UnidentifiedImageError
 from math import gcd
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QLabel, QHBoxLayout, QFileDialog, QPushButton,
-QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
-from PySide6.QtGui import QIcon, QDesktopServices, QAction
+QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu, QStyledItemDelegate)
+from PySide6.QtGui import QIcon, QDesktopServices, QAction, QPalette
 from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize
 # Soulstruct
 from soulstruct.dcx import oodle
@@ -22,6 +22,14 @@ from DSTextureStudio.Workers import *
 from DSTextureStudio.GUI import *
 
 BLANK_PATH = Path('.')
+
+class Delegate(QStyledItemDelegate):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+
+        brush = index.data(Qt.ForegroundRole)
+        if brush:
+            option.palette.setBrush(QPalette.HighlightedText, brush)
 
 class TextureStudio(QMainWindow):
     def __init__(self, project_dir):
@@ -48,10 +56,12 @@ class TextureStudio(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
 
         self.atlas_list = QListWidget()
+        self.atlas_list.setItemDelegate(Delegate(self.atlas_list))
         self.atlas_list.currentItemChanged.connect(self.showAtlas)
         splitter.addWidget(self.atlas_list)
 
         self.subtexture_list = QListWidget()
+        self.subtexture_list.setItemDelegate(Delegate(self.subtexture_list))
         self.subtexture_list.currentItemChanged.connect(self.showSubtexture)
         self.subtexture_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.subtexture_list.customContextMenuRequested.connect(self.openSubtextureMenu)
