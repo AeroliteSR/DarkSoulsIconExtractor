@@ -726,23 +726,33 @@ class TextureStudio(QMainWindow):
         self.showAtlas(self.atlas_list.currentItem())
 
     def openSearchWindow(self):
-        """Creates a SearchWindow instance and then handles the returned settings and string."""
-        def handle_search(text, atlasMode):
-            if atlasMode:
-                widget = self.atlas_list
-            else:
-                widget = self.subtexture_list
+        """Creates a SearchWindow instance and handles the search."""
 
-            if not widget.count() > 0:
+        def handle_search(text, atlasMode):
+            widget = self.atlas_list if atlasMode else self.subtexture_list
+
+            if widget.count() == 0:
                 showError('No Textures are loaded.')
                 return
 
-            results = widget.findItems(text, Qt.MatchContains)
-            if results:
-                item = results[0]
-                item.setSelected(True)
-                widget.setCurrentItem(item)
-                widget.scrollToItem(item)
+            text = text.lower().strip()
+            found = False
+            first_match = None
+
+            for i in range(widget.count()):
+                item = widget.item(i)
+
+                matches = text in item.text().lower()
+                item.setHidden(not matches)
+
+                if matches and first_match is None:
+                    first_match = item
+                    found = True
+
+            if found:
+                widget.setCurrentItem(first_match)
+                first_match.setSelected(True)
+                widget.scrollToItem(first_match)
             else:
                 showError('No results found!')
 

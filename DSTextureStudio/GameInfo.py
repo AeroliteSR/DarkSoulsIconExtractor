@@ -3209,7 +3209,7 @@ class Maps():
             'SB_FE_02': 'Sen + Overlay',
             'SB_Icon': 'Prosthetics + Consumables',
             'SB_Icon_02': 'Combat Arts',
-            'SB_Icon_03': 'Key Items',
+            'SB_Icon_03': 'Key Items + Consumables',
             'SB_Icon_04': 'Memories',
             'SB_Icon_Skill': 'Combat Art Banners',
             'SB_Icon_Skill_02': 'Ninjutsu',
