@@ -41,14 +41,17 @@ class ExpandableLabel(QLabel):
                 self.popup = None
 
     def expand(self):
-
         window = self.window()
+        window._min = window.minimumSize()
+        window._max = window.maximumSize()
+        size = window.size()
+        window.setMinimumSize(size)
+        window.setMaximumSize(size)
+
         top_left = self.mapTo(window, self.rect().topLeft())
 
         start_rect = QRect(top_left.x(), top_left.y(), self.width(), self.height())
-        anchor_x = start_rect.x() + start_rect.width()
-        anchor_y = start_rect.y() + start_rect.height()
-        end_rect = QRect(anchor_x - 650, anchor_y - 400, 650, 400)
+        end_rect = start_rect.adjusted(-80, -240, 0, 0)
 
         self.popup = ExpandableLabel(
             self.full_text,
@@ -76,14 +79,20 @@ class ExpandableLabel(QLabel):
         self.anim.start()
 
     def collapse(self):
+        window = self.window()
         end_rect = self.origin_rect
 
         self.anim = QPropertyAnimation(self, b"geometry")
-        self.anim.setDuration(300)
+        self.anim.setDuration(200)
         self.anim.setStartValue(self.geometry())
         self.anim.setEndValue(end_rect)
 
-        self.anim.finished.connect(self.deleteLater)
+        def unlock():
+            window.setMinimumSize(window._min)
+            window.setMaximumSize(window._max)
+            self.deleteLater()
+
+        self.anim.finished.connect(unlock)
         self.anim.start()
 
 class Palettes():
