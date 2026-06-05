@@ -5,7 +5,6 @@ from io import BytesIO
 from pathlib import Path
 from PySide6.QtWidgets import QListWidgetItem
 from PySide6.QtGui import QPixmap, QImage
-from PySide6.QtCore import Qt
 import re
 from .Enums import ResFormat, Game
 from .GUI import gameTypeDialog
@@ -155,13 +154,11 @@ def createDebugGrid(image, subtextures):
 
     return debug
 
-def pil2Qpixmap(pil_img, max_size=(600, 400)) -> QPixmap:
+def pil2Qpixmap(pil_img) -> QPixmap:
     """Convert PIL Image to QPixmap without destroying the aspect ratio lol"""
     data = pil_img.tobytes("raw", "RGBA")
     qimg = QImage(data, pil_img.width, pil_img.height, QImage.Format_RGBA8888)
-    pixmap = QPixmap.fromImage(qimg)
-
-    return pixmap.scaled(max_size[0], max_size[1], Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return QPixmap.fromImage(qimg)
 
 def getPngSize(pil_img):
     """Simulate a png export to get file size."""

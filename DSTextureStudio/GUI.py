@@ -1,8 +1,84 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox)
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
+QStyledItemDelegate, QGraphicsView, QGraphicsScene)
+from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect
+from PySide6.QtGui import QPalette, QPainter
 from .GameInfo import Types
 from .Enums import Game
+
+class Delegate(QStyledItemDelegate):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+
+        brush = index.data(Qt.ForegroundRole)
+        if brush:
+            option.palette.setBrush(QPalette.HighlightedText, brush)
+
+class ExpandableLabel(QLabel):
+    def __init__(self, short_text, full_text, parent=None, ispopup=False):
+        super().__init__(short_text, parent)
+
+        self.short_text = short_text
+        self.full_text = full_text
+        self.ispopup = ispopup
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            match self.ispopup:
+                case True:
+                    self.collapse()
+                case False:
+                    self.expand()
+
+    def setText(self, text: tuple[str, str]):
+        """Takes a tuple of short text and full text for when expanded."""
+        self.short_text, self.full_text = text
+        super().setText(self.full_text if self.ispopup else self.short_text)
+
+    def expand(self):
+
+        window = self.window()
+        top_left = self.mapTo(window, self.rect().topLeft())
+
+        start_rect = QRect(top_left.x(), top_left.y(), self.width(), self.height())
+        anchor_x = start_rect.x() + start_rect.width()
+        anchor_y = start_rect.y() + start_rect.height()
+        end_rect = QRect(anchor_x - 650, anchor_y - 400, 650, 400)
+
+        self.popup = ExpandableLabel(
+            self.full_text,
+            self.full_text,
+            window,
+            ispopup=True)
+        self.popup.setWordWrap(True)
+        self.popup.setGeometry(start_rect)
+        self.popup.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.popup.setStyleSheet("""
+            QLabel {
+                background-color: #333333;
+                border: 2px solid #888;
+                border-radius: 8px;
+                padding: 10px;
+            }""")
+        self.popup.show()
+
+        self.popup.origin_rect = start_rect
+
+        self.anim = QPropertyAnimation(self.popup, b"geometry")
+        self.anim.setDuration(200)
+        self.anim.setStartValue(start_rect)
+        self.anim.setEndValue(end_rect)
+        self.anim.start()
+
+    def collapse(self):
+        end_rect = self.origin_rect
+
+        self.anim = QPropertyAnimation(self, b"geometry")
+        self.anim.setDuration(300)
+        self.anim.setStartValue(self.geometry())
+        self.anim.setEndValue(end_rect)
+
+        self.anim.finished.connect(self.deleteLater)
+        self.anim.start()
 
 class Palettes():
     DARK_STYLESHEET = """
@@ -276,3 +352,89 @@ class TextureNamePrompt(QDialog):
         if not id.isdigit() or not 0 <= int(id) < 65536:
             showError("Inputted ID is not an asserted UInt16.\nThis may silently throw errors in Smithbox or elsewhere.\nRename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
         return f"{self.prefix_input.currentText()}_{id}", half
+
+class ImageLabel(QLabel):
+    def __init__(self, text, parent=None):
+        super().__init__(parent, text=text)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.openView()
+
+    def openView(self):
+        if self.pixmap():
+            self.viewer = ImageViewer(self.pixmap())
+            self.viewer.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+            self.viewer.showFullScreen()
+
+class ImageViewer(QGraphicsView):
+    def __init__(self, pixmap, parent=None):
+        super().__init__(parent)
+
+        self.setScene(QGraphicsScene(self))
+        self.pixmap_item = self.scene().addPixmap(pixmap)
+        self.setRenderHints(self.renderHints() |
+                            QPainter.Antialiasing |
+                            QPainter.SmoothPixmapTransform)
+
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setStyleSheet("background-color: black; border: none;")
+        self.zoom_level = 0
+
+        self.scene().setSceneRect(self.pixmap_item.boundingRect().adjusted(-100, -100, 100, 100))
+
+        self.hud = QLabel("ESC / RMB to close\nR to reset", self)
+        self.hud.setStyleSheet("""
+            QLabel {
+                color: white;
+                background-color: rgba(0, 0, 0, 120);
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 16px;
+            }""")
+
+        self.hud.adjustSize()
+        self.hud.move(10, 10)
+        self.hud.raise_()
+        self.hud.show()
+
+    def resetView(self):
+        self.resetTransform()
+        self.centerOn(self.pixmap_item)
+        self.zoom_level = 0
+
+    def wheelEvent(self, event):
+        zoom_in = 1.25
+        zoom_out = 0.8
+
+        if event.angleDelta().y() > 0:
+            factor = zoom_in
+            self.zoom_level += 1
+        else:
+            factor = zoom_out
+            self.zoom_level -= 1
+
+        if self.zoom_level < -10:
+            self.zoom_level = -10
+            return
+        if self.zoom_level > 30:
+            self.zoom_level = 30
+            return
+
+        self.scale(factor, factor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            self.close()
+            return
+
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close()
+            return
+        
+        if event.key() == Qt.Key_R:
+            self.resetView()
+            return

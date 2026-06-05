@@ -8,11 +8,13 @@ from PIL import Image, UnidentifiedImageError
 from math import gcd
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QLabel, QHBoxLayout, QFileDialog, QPushButton,
-QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu, QStyledItemDelegate)
-from PySide6.QtGui import QIcon, QDesktopServices, QAction, QPalette
+QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
+from PySide6.QtGui import QIcon, QDesktopServices, QAction
 from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize
 # Soulstruct
 from soulstruct.dcx import oodle
+from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
+from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP
 # DSTS
 from DSTextureStudio.GameInfo import Maps
 from DSTextureStudio.Dataclasses import *
@@ -22,14 +24,6 @@ from DSTextureStudio.Workers import *
 from DSTextureStudio.GUI import *
 
 BLANK_PATH = Path('.')
-
-class Delegate(QStyledItemDelegate):
-    def initStyleOption(self, option, index):
-        super().initStyleOption(option, index)
-
-        brush = index.data(Qt.ForegroundRole)
-        if brush:
-            option.palette.setBrush(QPalette.HighlightedText, brush)
 
 class TextureStudio(QMainWindow):
     def __init__(self, project_dir):
@@ -70,16 +64,16 @@ class TextureStudio(QMainWindow):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
 
-        self.preview_label = QLabel("Texture Preview")
+        self.preview_label = ImageLabel("Texture Preview")
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setStyleSheet("border: 1px solid gray; background: #222; color: white;")
         self.preview_label.setMinimumSize(600, 400)
         right_layout.addWidget(self.preview_label)
 
-        self.info_label = QLabel("Texture Info")
+        self.info_label = ExpandableLabel("Texture Info", "Texture Info")
         self.info_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.info_label.setStyleSheet("background: #333; color: white; padding: 6px; border-radius: 4px;")
-        self.info_label.setFixedHeight(150)  # fixed space for info text
+        self.info_label.setMinimumHeight(150)
         right_layout.addWidget(self.info_label)
 
         self.save_button = QPushButton("Export Selected Texture")
@@ -417,8 +411,8 @@ class TextureStudio(QMainWindow):
         self.pending_replacements = {}
         self.RESOLUTIONS = {}
         self.game = Game(None)
-        self.preview_label.setText("Select an atlas or subtexture")
-        self.info_label.setText("Image info will appear here")
+        self.preview_label.setText("Texture Preview")
+        self.info_label.setText(("Texture Info", "Texture Info"))
 
     def checkOodleDLL(self):
         """Find the oodle dll, or prompt for its location"""
@@ -894,12 +888,23 @@ class TextureStudio(QMainWindow):
             if kb < 1024:
                 return f"{kb:.1f} KB"
             return f"{kb / 1024:.2f} MB"
+
+        tpft = self.atlases[name].texture
+        c_info = tpft.console_info
+        if c_info is not None:
+            c_info = (f"<br><b>Texture Count:</b> {c_info.texture_count}<br>"
+                      f"<b>DXGI Format:</b> {c_info.dxgi_format}<br>"
+                      f"<b>unk1:</b> {c_info.unk1}<br>"
+                      f"<b>unk2:</b> {c_info.unk2}")
+        t_info = tpft.get_texture_format_info(tpft.format)
+        t_format = TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[tpft.format]
         
         width, height = pil_img.size
         g = gcd(width, height)
         size_uc = formatSize(width * height * len(pil_img.getbands()))
         size_c = formatSize(getPngSize(pil_img)) if self.btn_calcImageSize.isChecked() else "???"
-        return (
+
+        short = (
             f"<b>Type:</b> {img_type}<br>"
             f"<b>Name:</b> {name}<br>"
             f"<b>In:</b> {file}<br>"
@@ -907,8 +912,21 @@ class TextureStudio(QMainWindow):
             f"<b>Dimensions:</b> {width} × {height}px<br>"
             f"<b>Aspect Ratio:</b> {width//g}:{height//g}<br>"
             f"<b>Uncompressed Size:</b> {size_uc}<br>"
-            f"<b>Compressed Size:</b> {size_c}"
-        )
+            f"<b>Compressed Size:</b> {size_c}<br><br>")
+        
+        expanded = short + (
+            f"<b>Platform:</b> {tpft.platform.name}<br>"
+            f"<b>Format:</b> {t_format.name}<br>"
+            f"<b>Mipmap Count:</b> {tpft.mipmap_count}<br>"
+            f"<b>Texture Flags:</b> {tpft.texture_flags}<br>"
+            f"<b>Fourcc:</b> {t_info[0]}<br>"
+            f"<b>Bytes Per Block:</b> {t_info[1]}<br>"
+            f"<b>Bits Per Pixel:</b> {DXGI_FORMAT_BPP[t_format]}<br>"
+            f"<b>Is Compressed:</b> {t_info[2]}<br><br>"
+
+            f"<b>Console Info:</b> {c_info}<br><br>")
+        
+        return short, expanded
 
     def rebuildAtlas(self, atlas_name, dcx_file):
         """Reconstruct the atlas with its changes"""
@@ -996,8 +1014,7 @@ class TextureStudio(QMainWindow):
         atlas_img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked())
         preview_img = atlas_img.copy()
         preview_img.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
-        pixmap = pil2Qpixmap(preview_img)
-        self.preview_label.setPixmap(pixmap)
+        self.preview_label.setPixmap(pil2Qpixmap(preview_img))
 
         if self.isModified(dcx_file, atlas_name, None) == Modified.REPLACED: # check if WHOLE atlas is replaced
             atlas_modified = True
@@ -1046,9 +1063,8 @@ class TextureStudio(QMainWindow):
 
         cropped = atlas_img.crop(st.box())
         cropped.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
-        pixmap = pil2Qpixmap(cropped)
 
-        self.preview_label.setPixmap(pixmap)
+        self.preview_label.setPixmap(pil2Qpixmap(cropped))
         self.current_crop = cropped
         self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, (st.x, st.y), 'Subtexture'))
 
