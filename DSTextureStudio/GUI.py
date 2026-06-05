@@ -34,6 +34,12 @@ class ExpandableLabel(QLabel):
         self.short_text, self.full_text = text
         super().setText(self.full_text if self.ispopup else self.short_text)
 
+        if not self.ispopup and hasattr(self, "popup") and self.popup is not None:
+            try:
+                self.popup.setText(text)
+            except RuntimeError:
+                self.popup = None
+
     def expand(self):
 
         window = self.window()
