@@ -73,7 +73,7 @@ class ExpandableLabel(QLabel):
         self.popup.origin_rect = start_rect
 
         self.anim = QPropertyAnimation(self.popup, b"geometry")
-        self.anim.setDuration(200)
+        self.anim.setDuration(100)
         self.anim.setStartValue(start_rect)
         self.anim.setEndValue(end_rect)
         self.anim.start()
@@ -83,7 +83,7 @@ class ExpandableLabel(QLabel):
         end_rect = self.origin_rect
 
         self.anim = QPropertyAnimation(self, b"geometry")
-        self.anim.setDuration(200)
+        self.anim.setDuration(100)
         self.anim.setStartValue(self.geometry())
         self.anim.setEndValue(end_rect)
 

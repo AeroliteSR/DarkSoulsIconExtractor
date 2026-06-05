@@ -610,7 +610,7 @@ class TextureStudio(QMainWindow):
             item.setData(Qt.UserRole, name) # original name
             item.setData(Qt.UserRole+1, _atlas.parent) # parent file
             item.setSizeHint(QSize(0, 30))
-            img_type = "Atlas" if len(self.subtextures.get(name, {})) > 0 else "Texture"
+            img_type = ImageType.Atlas if len(self.subtextures.get(name, {})) > 0 else ImageType.Texture
             item.setData(Qt.UserRole+2, img_type) # image type
             self.atlas_list.addItem(item)
 
@@ -881,23 +881,13 @@ class TextureStudio(QMainWindow):
         else:
             showError(msg)
 
-    def formatImageInfo(self, name, file, pil_img, coords='None', img_type="Atlas"):
+    def formatImageInfo(self, name, file, pil_img, coords='None', img_type: ImageType = ImageType.Atlas):
         """Properly format information about the selected preview to display."""
         def formatSize(bytes_val):
             kb = bytes_val / 1024
             if kb < 1024:
                 return f"{kb:.1f} KB"
             return f"{kb / 1024:.2f} MB"
-
-        tpft = self.atlases[name].texture
-        c_info = tpft.console_info
-        if c_info is not None:
-            c_info = (f"<br><b>Texture Count:</b> {c_info.texture_count}<br>"
-                      f"<b>DXGI Format:</b> {c_info.dxgi_format}<br>"
-                      f"<b>unk1:</b> {c_info.unk1}<br>"
-                      f"<b>unk2:</b> {c_info.unk2}")
-        t_info = tpft.get_texture_format_info(tpft.format)
-        t_format = TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[tpft.format]
         
         width, height = pil_img.size
         g = gcd(width, height)
@@ -905,7 +895,7 @@ class TextureStudio(QMainWindow):
         size_c = formatSize(getPngSize(pil_img)) if self.btn_calcImageSize.isChecked() else "???"
 
         short = (
-            f"<b>Type:</b> {img_type}<br>"
+            f"<b>Type:</b> {img_type.name}<br>"
             f"<b>Name:</b> {name}<br>"
             f"<b>In:</b> {file}<br>"
             f"<b>Coordinates:</b> {coords}<br>"
@@ -914,7 +904,20 @@ class TextureStudio(QMainWindow):
             f"<b>Uncompressed Size:</b> {size_uc}<br>"
             f"<b>Compressed Size:</b> {size_c}<br><br>")
         
-        expanded = short + (
+        expanded = short 
+        
+        if img_type != ImageType.Subtexture:
+            tpft = self.atlases[name].texture
+            c_info = tpft.console_info
+            if c_info is not None:
+                c_info = (f"<br><b>Texture Count:</b> {c_info.texture_count}<br>"
+                        f"<b>DXGI Format:</b> {c_info.dxgi_format}<br>"
+                        f"<b>unk1:</b> {c_info.unk1}<br>"
+                        f"<b>unk2:</b> {c_info.unk2}")
+            t_info = tpft.get_texture_format_info(tpft.format)
+            t_format = TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[tpft.format]
+            
+            expanded += (
             f"<b>Platform:</b> {tpft.platform.name}<br>"
             f"<b>Format:</b> {t_format.name}<br>"
             f"<b>Mipmap Count:</b> {tpft.mipmap_count}<br>"
@@ -923,7 +926,6 @@ class TextureStudio(QMainWindow):
             f"<b>Bytes Per Block:</b> {t_info[1]}<br>"
             f"<b>Bits Per Pixel:</b> {DXGI_FORMAT_BPP[t_format]}<br>"
             f"<b>Is Compressed:</b> {t_info[2]}<br><br>"
-
             f"<b>Console Info:</b> {c_info}<br><br>")
         
         return short, expanded
@@ -1066,7 +1068,7 @@ class TextureStudio(QMainWindow):
 
         self.preview_label.setPixmap(pil2Qpixmap(cropped))
         self.current_crop = cropped
-        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, (st.x, st.y), 'Subtexture'))
+        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, (st.x, st.y), img_type=ImageType.Subtexture))
 
     def saveSelection(self):
         """Save current subtexture or whole atlas"""
@@ -1080,7 +1082,7 @@ class TextureStudio(QMainWindow):
 
         else: # No subtexture selected, export the full atlas   
             img_type = self.atlas_list.currentItem().data(Qt.UserRole+2)
-            if img_type == "Atlas":
+            if img_type == ImageType.Atlas:
                 ok, choice = self.showSelectOptions("Select Export", f"The currently selected texture is an atlas.\nWould you like to export the whole image, " \
                                                     "or its subtextures?", ["Full Atlas", "All Subtextures"])
                 

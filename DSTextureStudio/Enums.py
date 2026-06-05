@@ -14,6 +14,11 @@ class Modified(Enum):
     ADDED = auto()
     REPLACED = auto()
 
+class ImageType(Enum):
+    Atlas = auto()
+    Texture = auto()
+    Subtexture = auto()
+
 class Game():
     OLD_GAMES = {"Dark Souls 1", "Dark Souls 2", "Dark Souls 3"}
     PS_GAMES = {"Bloodborne", "Demon's Souls"}
