@@ -49,6 +49,11 @@ a significant performance drop. It is, therefore, disabled by default.
 but can be optionally selected for atlas exports.  
 `Alpha Threshold` - Any pixel with an alpha value less than or equal to this number will have their RGB values set to 0. Click to update the value.  
   
+## Other UI features
+Double clicking the texture info box will expand it to show extra metadata.  
+  
+Double clicking the texture preview will open a fullscreen viewport so you can zoom and pan around the image.  
+  
 ## Searching entries
 You can press the `Search` button on the menu bar to open a prompt for a string. It defaults to Qt.MatchContains within the subtextures list.
 If you want it to search through atlases (for example, for DS2), check `Search Atlases`  
