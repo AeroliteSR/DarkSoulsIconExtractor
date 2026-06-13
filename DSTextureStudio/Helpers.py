@@ -1,67 +1,12 @@
 from PIL import Image, ImageDraw
-import xml.etree.ElementTree as ET
 import numpy as np
 from io import BytesIO
 from pathlib import Path
-from PySide6.QtWidgets import QListWidgetItem
 from PySide6.QtGui import QPixmap, QImage
-import re
-from .Enums import ResFormat, Game
+from .Enums import Game
 from .GUI import gameTypeDialog
-from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
-from soulstruct.dcx import core, DCXType
-
-ROOTS = {
-        "Sekiro": Path(r"N:\NTC\data\Menu\ScaleForm\SBLayout\01_Common"),
-
-        "Elden Ring": Path(r"N:\GR\data\Menu\ScaleForm\SBLayout\01_Common"),
-
-        "Nightreign": Path(r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif"),
-    }
-
-
-class NaturalListItem(QListWidgetItem):
-    def __init__(self, text):
-        super().__init__(text)
-
-    @staticmethod
-    def naturalSortKey(text):
-        return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', text)]
-    
-    def __lt__(self, other):
-        return NaturalListItem.naturalSortKey(self.text()) < NaturalListItem.naturalSortKey(other.text())
-
-def processLayout(additions, game: Game, base_name, format_mode):
-    data = additions['data']
-    to_add = additions['additions']
-    output_name = additions['output']
-
-    binder = Binder(
-        version=BinderVersion.V4,
-        dcx_type=DCXType.DCX_KRAK,
-        v4_info=BinderVersion4Info(False, False, True, 4))
-    
-    _format = ResFormat.from_name(game.name)
-    root = ROOTS.get(game.name, "") / base_name / _format.get(format_mode)
-
-    for atlas in data:
-        atlas_path = replaceTerms(atlas.image_path, {'.png': '', '.tif': ''})
-        atlas_subtextures = [sub for sub in to_add if sub.parent in atlas_path]
-
-        atlas.add_subtextures(atlas_subtextures)
-
-    for atlas in data:
-        xml_bytes = ET.tostring(atlas.element, encoding='utf-8', method='xml', )
-        layout_path = replaceTerms(atlas.image_path, {'.png': '.layout', '.tif': '.layout'})
-        entry = BinderEntry(
-            data=xml_bytes,
-            entry_id=binder.get_first_new_entry_id_in_range(0, 1000000),
-            path=str(root / layout_path),
-            flags=0x2)
-        
-        binder.add_entry(entry=entry)
-
-    binder.write(output_name)
+from soulstruct.dcx import core
+import tempfile
 
 def getLayoutData(dcx_path):
     with open(dcx_path, "rb") as f:
@@ -74,8 +19,8 @@ def getLayoutData(dcx_path):
 def getFreeSpace(atlas_size, used_rects, w, h, step=4, padding=2):
     atlas_w, atlas_h = atlas_size
 
-    for y in range(0, atlas_h - h, step):
-        for x in range(0, atlas_w - w, step):
+    for y in range(padding, atlas_h - h - padding, step):
+        for x in range(padding, atlas_w - w - padding, step):
 
             new_rect = (x - padding, y - padding, x + w + padding, y + h + padding)
 
@@ -108,31 +53,31 @@ def replaceTerms(text, terms: dict):
             text = text.replace(term, replacement)
     return text
     
-def parseGameType(path) -> Game:
-    game_type = None
-    parts = Path(path).parts
-
-    def has_sequence(parts, sequence):
+def path_has_sequence(parts, sequence):
         for i in range(len(parts) - len(sequence) + 1):
             if parts[i:i+len(sequence)] == tuple(sequence):
                 return True
         return False
 
+def parseGameType(path) -> Game:
+    game_type = None
+    parts = Path(path).parts
+
     if "PS3_GAME" in parts:
         game_type = 'Demon\'s Souls'
-    if has_sequence(parts, ["steamapps", "common", "DARK SOULS REMASTERED"]):
+    if path_has_sequence(parts, ["steamapps", "common", "DARK SOULS REMASTERED"]):
         game_type = 'Dark Souls 1'
-    elif has_sequence(parts, ["steamapps", "common", "Dark Souls II Scholar of the First Sin"]):
+    elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II Scholar of the First Sin"]):
         game_type = 'Dark Souls 2'
-    elif has_sequence(parts, ["steamapps", "common", "DARK SOULS III"]):
+    elif path_has_sequence(parts, ["steamapps", "common", "DARK SOULS III"]):
         game_type = 'Dark Souls 3'
-    elif has_sequence(parts, ["Bloodborne", "CUSA03173", "dvdroot_ps4"]):
+    elif path_has_sequence(parts, ["Bloodborne", "CUSA03173", "dvdroot_ps4"]):
         game_type = 'Bloodborne'
-    elif has_sequence(parts, ["steamapps", "common", "Sekiro"]):
+    elif path_has_sequence(parts, ["steamapps", "common", "Sekiro"]):
         game_type = 'Sekiro'
-    elif has_sequence(parts, ["steamapps", "common", "ELDEN RING NIGHTREIGN"]):
+    elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING NIGHTREIGN"]):
         game_type = 'Nightreign'
-    elif has_sequence(parts, ["steamapps", "common", "ELDEN RING"]):
+    elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING"]):
         game_type = 'Elden Ring'
 
     return Game(game_type)
@@ -171,3 +116,11 @@ def checkGame(path: str) -> Game:
     if game.name is None:
         game = gameTypeDialog()
     return game
+
+def createBlankImage(dimensions: tuple) -> str:
+    img = Image.new("RGBA", dimensions, (0, 0, 0, 0))
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    img.save(temp_file.name, "PNG")
+
+    return temp_file.name
+

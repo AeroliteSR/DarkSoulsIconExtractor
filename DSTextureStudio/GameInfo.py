@@ -11845,6 +11845,9 @@ class Maps():
 
 class Types():
     from soulstruct.dcx import DCXType
+    from soulstruct.base.textures.dds.enums import DXGI_FORMAT
+    from pathlib import Path
+    
     CompressionTypes = {
         "Demon's Souls": DCXType.DCX_EDGE,
         "Dark Souls 1": DCXType.DCX_DFLT_10000_24_9,
@@ -11857,8 +11860,8 @@ class Types():
     }
 
     SubtexturePrefix = [
-        "MENU_Knowledge",
         "MENU_ItemIcon",
+        "MENU_Knowledge",
         "MENU_MAP",
         "MENU_StatusIcon",
         "MENU_SkillStory",
@@ -11867,3 +11870,20 @@ class Types():
         "MENU_RE",
         "MENU_Ch",
     ]
+
+    DDSFormats = {
+        "BC7_UNORM": 102,
+        "BC1_UNORM": 0,
+        "BC2_UNORM": 3,
+        "BC3_UNORM": 5,
+        "BC4_UNORM": 25,
+        "BC5_UNORM": 104,
+    }
+
+    ROOTS = { # maybe in the future if multiple file types use layouts, remove the "\01_Common" hardcode and make it from basename in buildOperations
+        "Sekiro": Path(r"N:\NTC\data\Menu\ScaleForm\SBLayout\01_Common"),
+
+        "Elden Ring": Path(r"N:\GR\data\Menu\ScaleForm\SBLayout\01_Common"),
+
+        "Nightreign": Path(r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common"),
+    }

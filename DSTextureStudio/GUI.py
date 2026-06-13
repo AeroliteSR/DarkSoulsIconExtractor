@@ -1,9 +1,21 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
-QStyledItemDelegate, QGraphicsView, QGraphicsScene)
-from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect
-from PySide6.QtGui import QPalette, QPainter
+QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem)
+from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
+from PySide6.QtGui import QPalette, QPainter, QAction
 from .GameInfo import Types
-from .Enums import Game
+from .Enums import Game, ImageType
+import re
+
+class NaturalListItem(QListWidgetItem):
+    def __init__(self, text):
+        super().__init__(text)
+
+    @staticmethod
+    def naturalSortKey(text):
+        return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', text)]
+    
+    def __lt__(self, other):
+        return NaturalListItem.naturalSortKey(self.text()) < NaturalListItem.naturalSortKey(other.text())
 
 class Delegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
@@ -259,6 +271,10 @@ def showError(text, title="Error", _type=QMessageBox.Critical):
 def showQuery(title, text):
     return QMessageBox.question(None, title, text, QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
 
+def showSelectOptions(title, text, options):
+    choice, ok = QInputDialog.getItem(title, text, options, 0, False)
+    return ok, choice
+
 def gameTypeDialog() -> Game:
     options = [
         "Demon's Souls",
@@ -329,44 +345,195 @@ class SearchWindow(QWidget):
         self.results.emit(text, self.atlas_search.isChecked())
 
 class TextureNamePrompt(QDialog):
-    def __init__(self, halfprompt=True):
+    def __init__(self, mode: ImageType = ImageType.Subtexture, padprompt=True, halfprompt=True):
         super().__init__()
+        self.mode = mode
         self.halfprompt = halfprompt
+        self.padprompt = padprompt
         self.setWindowTitle("Prompt")
 
-        layout = QVBoxLayout()
+        self.width_label = None
+        self.height_label = None
+        self.width_input = None
+        self.height_input = None
 
-        layout.addWidget(QLabel("Prefix:"))
+        self.layout = QVBoxLayout()
+
+        if self.mode == ImageType.Subtexture:
+            self.layout.addWidget(QLabel("Prefix:"))
+            self.prefix_input = QComboBox()
+            self.prefix_input.addItems(Types.SubtexturePrefix)
+            self.prefix_input.setEditable(True)
+            self.layout.addWidget(self.prefix_input)
+
+            self.layout.addWidget(QLabel("Icon ID:"))
+            self.id_input = QLineEdit()
+            self.layout.addWidget(self.id_input)
+
+            if self.padprompt:
+                self.padding_label = QLabel("Padding:")
+                self.padding_input = QSpinBox()
+                self.padding_input.setRange(1, 512)
+                self.padding_input.setValue(2)
+
+                self.layout.addWidget(self.padding_label)
+                self.layout.addWidget(self.padding_input)
+
+            if self.halfprompt:
+                self.half_checkbox = QCheckBox("Half")
+                self.layout.addWidget(self.half_checkbox)
+
+        else:
+            self.layout.addWidget(QLabel("Atlas Name:"))
+            self.name_input = QLineEdit()
+            self.layout.addWidget(self.name_input)
+
+            self.layout.addWidget(QLabel("Format:"))
+            self.format_input = QComboBox()
+            self.format_input.addItems(Types.DDSFormats.keys())
+            self.format_input.setEditable(True)
+            self.layout.addWidget(self.format_input)
+
+            self.blank_checkbox = QCheckBox("Blank Image")
+            self.blank_checkbox.clicked.connect(self.toggle_size_fields)
+            self.layout.addWidget(self.blank_checkbox)
+
+            self.toggle_size_fields(self.blank_checkbox.isChecked())
+
+        self.form_layout = QVBoxLayout()
+        self.layout.addLayout(self.form_layout)
+
+        self.submit_button = QPushButton("Submit")
+        self.layout.addWidget(self.submit_button)
+
+        self.setLayout(self.layout)
+
+        self.submit_button.clicked.connect(self.accept)
+
+    def toggle_size_fields(self, checked):
+        if not checked: # genuinely no idea why it's reversed
+            for widget in [self.width_label, self.height_label,
+                        self.width_input, self.height_input]:
+                if widget:
+                    self.form_layout.removeWidget(widget)
+                    widget.deleteLater()
+
+            self.width_label = self.width_input = None
+            self.height_label = self.height_input = None
+
+        else:
+            self.width_label = QLabel("Width:")
+            self.width_input = QSpinBox()
+            self.width_input.setRange(1, 8192)
+            self.width_input.setValue(1024)
+
+            self.height_label = QLabel("Height:")
+            self.height_input = QSpinBox()
+            self.height_input.setRange(1, 8192)
+            self.height_input.setValue(1024)
+
+            self.form_layout.addWidget(self.width_label)
+            self.form_layout.addWidget(self.width_input)
+            self.form_layout.addWidget(self.height_label)
+            self.form_layout.addWidget(self.height_input)
+
+        self.layout.invalidate()
+        self.layout.activate()
+        self.adjustSize()
+
+    def get_result(self):
+        if self.mode == ImageType.Subtexture:
+            if self.halfprompt:
+                half = self.half_checkbox.isChecked()
+            else:
+                half = False
+
+            id = self.id_input.text()
+            if not id.isdigit() or not 0 <= int(id) < 65536:
+                showError("Inputted ID is not an asserted UInt16.\nThis may silently throw errors in Smithbox or elsewhere.\nRename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
+            
+            if self.padprompt:
+                return f"{self.prefix_input.currentText()}_{id}", self.padding_input.value(), half
+            else:
+                return f"{self.prefix_input.currentText()}_{id}", half
+        
+        else:
+            coords = (self.width_input.value(), self.height_input.value()) if self.blank_checkbox.isChecked() else None
+            return self.name_input.text(), self.format_input.currentText(), coords
+        
+class DefineSubtexturePrompt(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Prompt")
+
+        self.layout = QVBoxLayout()
+
+        self.layout.addWidget(QLabel("Prefix:"))
         self.prefix_input = QComboBox()
         self.prefix_input.addItems(Types.SubtexturePrefix)
         self.prefix_input.setEditable(True)
-        layout.addWidget(self.prefix_input)
+        self.layout.addWidget(self.prefix_input)
 
-        layout.addWidget(QLabel("Icon ID:"))
+        self.layout.addWidget(QLabel("Icon ID:"))
         self.id_input = QLineEdit()
-        layout.addWidget(self.id_input)
+        self.layout.addWidget(self.id_input)
+        
+        size_layout = QHBoxLayout()
 
-        if self.halfprompt:
-            self.half_checkbox = QCheckBox("Half")
-            layout.addWidget(self.half_checkbox)
+        size_layout.addWidget(QLabel("Width:"))
+        self.width_input = QSpinBox()
+        self.width_input.setRange(1, 8192)
+        self.width_input.setValue(128)
+        size_layout.addWidget(self.width_input)
+
+        size_layout.addSpacing(10)
+
+        size_layout.addWidget(QLabel("Height:"))
+        self.height_input = QSpinBox()
+        self.height_input.setRange(1, 8192)
+        self.height_input.setValue(128)
+        size_layout.addWidget(self.height_input)
+
+        self.layout.addLayout(size_layout)
+
+        xy_layout = QHBoxLayout()
+
+        xy_layout.addWidget(QLabel("X:"))
+        self.x_input = QSpinBox()
+        self.x_input.setRange(0, 8192)
+        self.x_input.setValue(0)
+        xy_layout.addWidget(self.x_input)
+
+        xy_layout.addSpacing(10)
+
+        xy_layout.addWidget(QLabel("Y:"))
+        self.y_input = QSpinBox()
+        self.y_input.setRange(0, 8192)
+        self.y_input.setValue(0)
+        xy_layout.addWidget(self.y_input)
+
+        self.layout.addLayout(xy_layout)
+
+        self.half_checkbox = QCheckBox("Half")
+        self.layout.addWidget(self.half_checkbox)
 
         self.submit_button = QPushButton("Submit")
-        layout.addWidget(self.submit_button)
+        self.layout.addWidget(self.submit_button)
 
-        self.setLayout(layout)
+        self.setLayout(self.layout)
 
         self.submit_button.clicked.connect(self.accept)
 
     def get_result(self):
-        if self.halfprompt:
-            half = self.half_checkbox.isChecked()
-        else:
-            half = False
+        half = self.half_checkbox.isChecked()
 
         id = self.id_input.text()
         if not id.isdigit() or not 0 <= int(id) < 65536:
             showError("Inputted ID is not an asserted UInt16.\nThis may silently throw errors in Smithbox or elsewhere.\nRename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
-        return f"{self.prefix_input.currentText()}_{id}", half
+        
+        hwcoords = (self.width_input.value(), self.height_input.value())
+        xycoords = (self.x_input.value(), self.y_input.value())
+        return f"{self.prefix_input.currentText()}_{id}", hwcoords, xycoords, half
 
 class ImageLabel(QLabel):
     def __init__(self, text, parent=None):
@@ -453,3 +620,40 @@ class ImageViewer(QGraphicsView):
         if event.key() == Qt.Key_R:
             self.resetView()
             return
+
+class TextureListWidget(QListWidget):
+    def __init__(self, parent=None, mode: ImageType = ImageType.Atlas):
+        super().__init__(parent)
+
+        self.add_button = QPushButton("+", self)
+        self.add_button.setFixedSize(28, 28)
+        self.add_button.setStyleSheet("""
+        QPushButton {
+            background-color: #2D2D2D;
+            font-size: 17px;
+            font-weight: bold;
+            padding-bottom: 4px;
+        }""")
+        
+        if mode == ImageType.Subtexture:
+            self.menu = QMenu()
+            self.def_option = QAction("Define", self)
+            self.add_option = QAction("Append", self)
+            self.menu.addAction(self.def_option)
+            self.menu.addAction(self.add_option)
+
+            self.add_button.clicked.connect(self.showMenu)
+
+        self.repositionButton()
+
+    def showMenu(self):
+        pos = self.add_button.mapToGlobal(QPoint(0, -self.menu.sizeHint().height()))
+        self.menu.popup(pos)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.repositionButton()
+
+    def repositionButton(self, margin=4):
+        self.add_button.move(self.width() - self.add_button.width() - margin, self.height() - self.add_button.height() - margin)
+

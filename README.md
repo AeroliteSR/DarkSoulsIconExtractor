@@ -36,6 +36,9 @@ Dark Souls 2 doesn't use atlases and just keeps a folder of thousands of images,
 _**Note**_: The high resolution versions of Elden Ring and Nightreigns's icons are stored in 00_solo(_h/l).tpfbdt which you can unpack with [WitchyBND](https://github.com/ividyon/WitchyBND).  
 Be aware that opening this directory in DSTS will use a LOT of resources. (~3.4GB of RAM for ER and ~1.3GB for NR)  
   
+A known issue to watch out for is that DSTS detects if it's hi/low using the files' paths. This means that if you're opening files from a directory that isn't 
+the game's vanilla path or a mod folder, it will default to `hi` and any exports that affect layouts will write that as the root. So the `low` versions will be mistakenly named `hi` which you'll have to change with WitchyBND by editing the given xml. Usually you'll be modding the `hi` versions anyway but it's good to be aware of this. This issue doesn't apply to Nightreign which specifies the version in the file name. (_h/_l)  
+  
 ## Settings:  
 `Custom Names` - This setting replaces the internal names with mapped ones in `GameInfo.py`. 
 This setting can be especially useful for if you don't know the ID of an item in a big list, allowing you to search by its display name. 

@@ -18,6 +18,11 @@ class ImageType(Enum):
     Atlas = auto()
     Texture = auto()
     Subtexture = auto()
+    Custom = auto()
+
+class IconMode(Enum):
+    Define = auto()
+    Append = auto()
 
 class Game():
     OLD_GAMES = {"Dark Souls 1", "Dark Souls 2", "Dark Souls 3"}
@@ -42,20 +47,35 @@ class Game():
         type_name = self.type.name if self.type else None
         return f"Game({self.name}, {type_name})"
 
+class Resolution(Enum):
+    HIGH = auto()
+    LOW = auto()
+
+    @property
+    def display(self):
+        return {
+            Resolution.HIGH: "High",
+            Resolution.LOW: "Low"
+        }[self]
+
 class ResFormat(Enum):
-    NIGHTREIGN = ("Nightreign", {"H": "High", "L": "Low"})
-    ELDEN_RING = ("Elden Ring", {"H": "Hi", "L": "Low"})
-    SEKIRO = ("Sekiro", {"H": "Hi", "L": "Low"})
+    NIGHTREIGN = ("Nightreign", {Resolution.HIGH: "High", Resolution.LOW: "Low"})
+    ELDEN_RING = ("Elden Ring", {Resolution.HIGH: "Hi", Resolution.LOW: "Low"})
+    SEKIRO = ("Sekiro", {Resolution.HIGH: "Hi", Resolution.LOW: "Low"})
 
-    def __init__(self, game_name: str, mapping: dict[str, str]):
-        self.game_name = game_name
-        self.mapping = mapping
+    @property
+    def game_name(self):
+        return self.value[0]
 
-    def get(self, res: str) -> str:
-        return self.mapping.get(res, res)
+    @property
+    def mapping(self):
+        return self.value[1]
+
+    def get(self, resolution: Resolution) -> str:
+        return self.mapping[resolution]
 
     @classmethod
-    def from_name(cls, name: str):
+    def from_name(cls, name: str) -> "ResFormat":
         for g in cls:
             if g.game_name == name:
                 return g

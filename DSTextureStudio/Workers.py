@@ -14,7 +14,7 @@ from PySide6.QtCore import QObject, Signal
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture
 from soulstruct.dcx import core
 # Custom
-from DSTextureStudio.GameInfo import Maps
+from DSTextureStudio.GameInfo import Maps, Types
 from DSTextureStudio.Dataclasses import *
 from DSTextureStudio.Enums import *
 from DSTextureStudio.Helpers import *
@@ -117,7 +117,7 @@ class LoadWorker(QObject):
                         return
 
                     for texture_atlas in atlas_nodes:
-                        filepath = texture_atlas.image_path
+                        filepath = texture_atlas.imagePath
                         filename = Path(filepath).stem
 
                         if filename not in textures_dict:
@@ -293,8 +293,9 @@ class ExtractWorker(QObject):
 class ReplaceWorker(QObject):
     finished = Signal(bool, str, Path)  # success, message
 
-    def __init__(self, replacements, additions, subtextures, loaded_files, layouts, getPilImage, game, resolutions):
+    def __init__(self, new_atlases, replacements, additions, subtextures, loaded_files, layouts, getPilImage, game, resolutions):
         super().__init__()
+        self.new_atlases = new_atlases
         self.replacements = replacements
         self.additions = additions
         self.subtextures = subtextures
@@ -306,64 +307,141 @@ class ReplaceWorker(QObject):
 
     def buildOperations(self):
         print("Building operations map...")
+
         dcx_ops = {}
 
+        # new atlases
+        for dcx_path, atlases in self.new_atlases.items():
+            base_name = Path(dcx_path)
+            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
+            dcx_ops[base_name]["new_atlases"].extend(atlases)
+
+        # replacements
         for dcx_path, atlases in self.replacements.items():
             base_name = Path(dcx_path)
-            dcx_ops.setdefault(base_name, {})
+            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
 
             for atlas_name, changes in atlases.items():
-                dcx_ops[base_name].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[base_name][atlas_name]["replacements"].update(changes)
+                dcx_ops[base_name]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
+                dcx_ops[base_name]["atlases"][atlas_name]["replacements"].update(changes)
 
+        # Additions
         for dcx_path, add_data in self.additions.items():
             base_name = Path(dcx_path)
 
-            if dcx_path in self.LAYOUT_FILES:
-                print(f"Processing layout for: {base_name}")
-                lyt_name = replaceTerms(base_name.name.split('.')[0], {"_h": "", "_l": ""}) if self.game.name == 'Nightreign' else ""
-                processLayout(add_data, self.game, lyt_name, format_mode=self.RESOLUTIONS.get(lyt_name, "H"))
+            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
 
             additions_by_atlas = {}
+
             for sub in add_data["additions"]:
                 if sub.parent is None:
                     continue
-                atlas_name = sub.parent
-                additions_by_atlas.setdefault(atlas_name, []).append(sub)
+
+                additions_by_atlas.setdefault(sub.parent, []).append(sub)
 
             for atlas_name, subs in additions_by_atlas.items():
-                dcx_ops.setdefault(base_name, {})
-                dcx_ops[base_name].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[base_name][atlas_name]["additions"].extend(subs)
+                dcx_ops[base_name]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
+                dcx_ops[base_name]["atlases"][atlas_name]["additions"].extend(subs)
+
+        # Layout handling
+        for dcx_name, data in dcx_ops.items():
+            base_name = Path(dcx_name)
+
+            if dcx_name not in self.LAYOUT_FILES:
+                continue
+
+            print(f"Processing layout for: {base_name}")
+
+            layout_objs = list(self.LAYOUT_FILES[dcx_name])
+
+            layout_map = {
+                replaceTerms(Path(layout.imagePath).stem, {"_h": "", "_l": ""}): layout # atlas name to AtlasLayout objects
+                for layout in layout_objs
+            }
+
+            filename = base_name.name.split('.')[0]
+            if self.game.name == "Nightreign":
+                filename = replaceTerms(filename, {"_h": "", "_l": ""})
+
+            game_format_mode = ResFormat.from_name(self.game.name).get(self.RESOLUTIONS.get(filename, Resolution.HIGH))
+            root = Types.ROOTS.get(self.game.name, "") / game_format_mode
+
+            for atlas_name, atlas_ops in data["atlases"].items():
+                additions = atlas_ops["additions"]
+                if not additions:
+                    continue
+
+                existing_layout = layout_map.get(atlas_name)
+
+                if existing_layout:
+                    print(f"Adding {len(additions)} subtexture(s) to existing layout '{atlas_name}'")
+                    existing_layout.add_subtextures(additions)
+
+                else:
+                    print(f"Creating layout entry for '{atlas_name}' with {len(additions)} subtexture(s)")
+
+                    imgpath = (rf"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{game_format_mode}\{atlas_name}.tif"
+                            if self.game.name == "Nightreign"
+                            else f"{atlas_name}.png")
+
+                    new_layout = AtlasLayout.create(
+                        image_path=imgpath,
+                        subtextures=additions
+                    )
+
+                    layout_objs.append(new_layout)
+                    layout_map[atlas_name] = new_layout
+
+            AtlasLayout.build(
+                layout_objs=layout_objs,
+                root=root,
+                output=base_name.with_name(
+                    base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
+                )
+            )
 
         print("\nFinished building operations.")
         print("Summary of DCX operations:")
-        for dcx_name, atlases in dcx_ops.items():
+
+        for dcx_name, data in dcx_ops.items():
             print(f"File: {dcx_name}")
-            for atlas_name, ops in atlases.items():
-                rep_keys = list(ops['replacements'].keys())
-                add_names = [sub.name for sub in ops['additions']]
-                print(f"  Atlas: {atlas_name} | Replacements: {rep_keys if rep_keys != [None] else ['*Self*']} | Additions: {add_names}")
+
+            if data["new_atlases"]:
+                print(f"  New Atlases: {[t.name for t in data['new_atlases']]}")
+
+            for atlas_name, ops in data["atlases"].items():
+                rep_keys = list(ops["replacements"].keys())
+                add_names = [sub.name for sub in ops["additions"]]
+
+                print(f"  Atlas: {atlas_name} | "
+                      f"Replacements: {rep_keys} | "
+                      f"Additions: {add_names}")
 
         return dcx_ops
 
     def run(self):
+        self.outputLoc = None
         try:
-            for base_path, atlases in self.buildOperations().items():
+            for base_path, data in self.buildOperations().items():
+                self.outputLoc = base_path.parent
                 base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
+
+                if data["new_atlases"]:
+                    base.textures.extend([t.texture for t in data["new_atlases"]])
+
                 atlas_cache = {}
 
-                for atlas_name, ops in atlases.items():
+                for atlas_name, ops in data["atlases"].items():
                     if atlas_name not in atlas_cache:
                         atlas_cache[atlas_name] = self.getPilImage(atlas_name).copy()
                     atlas_img = atlas_cache[atlas_name]
 
                     for add in ops["additions"]:
-                        add.paste_into(atlas_img)
-                        #atlas_img.paste(add.img, (add.x, add.y))
+                            if add.img:
+                                add.paste_into(atlas_img)
 
                     for sub_name, new_img in ops["replacements"].items():
-                        if sub_name:  # subtexture replacement
+                        if sub_name != "*Self*":  # subtexture replacement
                             st = self.subtextures.get(atlas_name, {}).get(sub_name)
                             if not st:
                                 raise Exception(f"Could not resolve subtexture '{sub_name}' in atlas '{atlas_name}'")
@@ -385,7 +463,7 @@ class ReplaceWorker(QObject):
 
                 base.write(base_path)
 
-            self.finished.emit(True, "All changes applied successfully!", base_path.parent)
+            self.finished.emit(True, "All changes applied successfully!", self.outputLoc)
 
         except Exception:
-            self.finished.emit(False, traceback.format_exc(), base_path.parent)
+            self.finished.emit(False, traceback.format_exc(), self.outputLoc)
