@@ -580,6 +580,26 @@ class ImageViewer(QGraphicsView):
         self.hud.raise_()
         self.hud.show()
 
+        self.pixel_info = QLabel(self)
+        self.pixel_info.setStyleSheet("""
+            QLabel {
+                color: white;
+                background-color: rgba(0, 0, 0, 120);
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 16px;
+            }""")
+
+        self.pixel_info.show()
+        self.image = pixmap.toImage()
+
+        self.color_preview = QLabel(self)
+        self.color_preview.setFixedSize(32, 32)
+        self.color_preview.setStyleSheet("border: 1px solid white;")
+
+        self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
+
     def resetView(self):
         self.resetTransform()
         self.centerOn(self.pixmap_item)
@@ -620,6 +640,42 @@ class ImageViewer(QGraphicsView):
         if event.key() == Qt.Key_R:
             self.resetView()
             return
+        
+    def mouseMoveEvent(self, event):
+        scene_pos = self.mapToScene(event.pos())
+
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+
+        if 0 <= x < self.image.width() and 0 <= y < self.image.height():
+
+            color = self.image.pixelColor(x, y)
+
+            r = color.red()
+            g = color.green()
+            b = color.blue()
+            a = color.alpha()
+
+            hex_rgba = "#{:02X}{:02X}{:02X}{:02X}".format(r, g, b, a)
+            hsv = color.getHsv()
+            #h, s, l, _ = color.getHsl()
+            lum = int(0.2126 * r + 0.7152 * g + 0.0722 * b)
+
+            self.pixel_info.setText(
+                f"X: {x}  Y: {y}\n"
+                f"RGBA: {r}, {g}, {b}, {a}\n"
+                f"HEX: {hex_rgba}\n"
+                f"HSV: {hsv[0]}, {hsv[1]}, {hsv[2]}\n"
+                #f"HSL: {h}°, {s/255*100:.1f}%, {l/255*100:.1f}%\n"
+                f"Lum: {lum} ({lum/255*100:.1f}%)"
+            )
+            self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
+            self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
+
+            self.pixel_info.adjustSize()
+            self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
+
+        super().mouseMoveEvent(event)
 
 class TextureListWidget(QListWidget):
     def __init__(self, parent=None, mode: ImageType = ImageType.Atlas):
