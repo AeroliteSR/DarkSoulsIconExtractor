@@ -20,7 +20,7 @@ from DSTextureStudio.GameInfo import Maps, Types
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
-from DSTextureStudio.Workers import LoadWorker, ReplaceWorker, ExtractWorker
+from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem)
 
@@ -272,7 +272,7 @@ class TextureStudio(QMainWindow):
         dcx_file = Path(atlas_item.data(Qt.UserRole+1))
         sub_name = sub_item.data(Qt.UserRole)
 
-        self.subtextures.get(atlas_name, {}).pop(sub_name, None)
+        self.atlases.get(atlas_name, {}).rem(sub_name)
 
         pending = self.pending_additions.get(dcx_file)
         if pending:
@@ -347,12 +347,11 @@ class TextureStudio(QMainWindow):
 
         new_name, _ = dialog.get_result()
 
-        if new_name in self.subtextures.get(atlas_name, {}):
+        if self.atlases.get(atlas_name, {}).fetch(new_name): # returns None if SubTexture of that name isn't found
             showError(f"A subtexture named '{new_name}' already exists!")
             return
 
-        atlas_subs = self.subtextures.get(atlas_name, {})
-        atlas_subs[new_name] = atlas_subs.pop(old_name)
+        self.atlases.get(atlas_name, {}).rename(old_name, new_name)
 
         for info in self.pending_additions.values():
             for a in info.get("additions", []):
@@ -396,7 +395,6 @@ class TextureStudio(QMainWindow):
             self.pending_replacements.pop(dcx_file, None)
 
         self.thumbnail_cache.pop(atlas_name, None)
-        self.subtextures.pop(atlas_name, None)
 
         self.atlas_list.takeItem(self.atlas_list.row(atlas_item))
 
@@ -422,9 +420,6 @@ class TextureStudio(QMainWindow):
                 if atlas.name == old_name:
                     atlas.name = new_name
 
-        if old_name in self.subtextures:
-            self.subtextures[new_name] = self.subtextures.pop(old_name)
-
         for info in self.pending_additions.values():
             for sub in info["additions"]:
                 if sub.parent == old_name:
@@ -440,6 +435,10 @@ class TextureStudio(QMainWindow):
         if old_name in self.atlases:
             item = self.atlases.pop(old_name)
             item.name = new_name
+            for sub in item.subtextures:
+                if sub.parent is not None:
+                    print(sub.parent, new_name)
+                    sub.parent = new_name
             self.atlases[new_name] = item
 
         atlas_item.setText(new_name)
@@ -542,7 +541,7 @@ class TextureStudio(QMainWindow):
 
         atlas_name = atlas_item.data(Qt.UserRole)
         dcx_file = Path(atlas_item.data(Qt.UserRole+1))
-        subs = self.subtextures.get(atlas_name, {})
+        subs = self.atlases.get(atlas_name, {}).subtextures
 
         match mode:
             case IconMode.Append:
@@ -568,7 +567,7 @@ class TextureStudio(QMainWindow):
                 w, h = img.size
                 atlas_img = self.getPilImage(atlas_name)
 
-                used_rects = [st.box(padding=padding) for st in subs.values()]
+                used_rects = [st.box(padding=padding) for st in subs]
                 pos = getFreeSpace(atlas_img.size, used_rects, w, h, padding=padding)
 
                 if pos:
@@ -604,14 +603,13 @@ class TextureStudio(QMainWindow):
         )
 
         self.pending_additions.setdefault(dcx_file, {
-            "data": self.LAYOUT_FILES.get(dcx_file),
+            "data": self.LAYOUT_DATA.get(dcx_file),
             "additions": [],
             "output": dcx_file.with_name(dcx_file.name.replace('.tpf.dcx', '.sblytbnd.dcx'))
         })
 
         self.pending_additions[dcx_file]["additions"].append(sub)
-
-        self.subtextures.setdefault(atlas_name, {})[name] = SubTexture(name=name, x=x, y=y, width=w, height=h, blank=False)
+        self.atlases[atlas_name].add(sub)
 
         self.rebuildAtlas(atlas_name, dcx_file)
         self.showAtlas(atlas_item)
@@ -621,7 +619,6 @@ class TextureStudio(QMainWindow):
         self.setWindowTitle("DSTS")
         self.atlas_list.clear()
         self.subtexture_list.clear()
-        self.subtextures = {}
         self.atlases = {}
         self.current_crop = None
         self.current_atlas = None
@@ -737,7 +734,7 @@ class TextureStudio(QMainWindow):
                     continue
 
                 if len(available) > 1:
-                    ok, choice = self.showSelectOptions("Select Resolution", f"{prefix} has both high and low resolution. Which do you want?", 
+                    ok, choice = showSelectOptions("Select Resolution", f"{prefix} has both high and low resolution. Which do you want?", 
                                                         [i.display   for i in available])
                     if not ok:
                         return
@@ -813,7 +810,7 @@ class TextureStudio(QMainWindow):
         self.thread.started.connect(self.worker.run)
         self.thread.start()
 
-    def loadDone(self, atlases, subtextures, LOADED_DCX_FILES, LAYOUT_FILES, msg):
+    def loadDone(self, atlases, LOADED_DCX_FILES, LAYOUT_DATA, msg):
         """Stuff to do on successful load of files."""
         self.progress_dialog.close()
 
@@ -822,9 +819,8 @@ class TextureStudio(QMainWindow):
             return
 
         self.atlases = atlases
-        self.subtextures = subtextures
         self.LOADED_DCX_FILES = LOADED_DCX_FILES
-        self.LAYOUT_FILES = LAYOUT_FILES
+        self.LAYOUT_DATA = LAYOUT_DATA
 
         self.atlas_list.clear()
         for name, _atlas in atlases.items():
@@ -832,8 +828,7 @@ class TextureStudio(QMainWindow):
             item.setData(Qt.UserRole, name) # original name
             item.setData(Qt.UserRole+1, _atlas.parent) # parent file
             item.setSizeHint(QSize(0, 30))
-            img_type = ImageType.Atlas if len(self.subtextures.get(name, {})) > 0 else ImageType.Texture
-            item.setData(Qt.UserRole+2, img_type) # image type
+            item.setData(Qt.UserRole+2, self.atlases.get(name, {}).itype) # image type
             self.atlas_list.addItem(item)
 
         self.atlas_list.sortItems()
@@ -846,7 +841,7 @@ class TextureStudio(QMainWindow):
         output_dir = self.project_dir / "Output"
 
         if mode == ExportMode.ATLAS:
-            ok, filetype = self.showSelectOptions('File Type', 'Would you like to export in PNG or DDS?', ['png', 'dds'])
+            ok, filetype = showSelectOptions('File Type', 'Would you like to export in PNG or DDS?', ['png', 'dds'])
             if not ok:
                 return
         else:
@@ -859,7 +854,7 @@ class TextureStudio(QMainWindow):
         QApplication.processEvents()
 
         thread = QThread(self)
-        worker = ExtractWorker(self.atlases, self.subtextures, output_dir, loader=self.getPilImage, tasks=tasks, mode=mode, filetype=filetype, gridOverlay=gridOverlay)
+        worker = ExtractWorker(self.atlases, output_dir, loader=self.getPilImage, tasks=tasks, mode=mode, filetype=filetype, gridOverlay=gridOverlay)
         worker.moveToThread(thread)
 
         self.Ethread = thread
@@ -980,7 +975,7 @@ class TextureStudio(QMainWindow):
     def resolveSubtexture(self, atlas_name, sub_name, atlas_img) -> SubTexture:
         """Return subtexture rect from either layout or grid system."""
 
-        st = self.subtextures.get(atlas_name, {}).get(sub_name)
+        st = self.atlases.get(atlas_name, {}).fetch(sub_name)
         if st:
             return st
 
@@ -1084,8 +1079,7 @@ class TextureStudio(QMainWindow):
         self.replace_dialog.setStyleSheet("""QLabel {qproperty-alignment: AlignCenter;} QProgressBar {text-align: center;}""")
 
         self.r_thread = QThread()
-        self.r_worker = ReplaceWorker(self.pending_new_atlases, self.pending_replacements, self.pending_additions,
-                                      self.subtextures, self.LOADED_DCX_FILES, self.LAYOUT_FILES,
+        self.r_worker = WriteWorker(self.pending_new_atlases, self.pending_replacements, self.pending_additions, self.LOADED_DCX_FILES, self.LAYOUT_DATA,
                                       self.getPilImage, self.game, self.RESOLUTIONS)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
@@ -1188,7 +1182,7 @@ class TextureStudio(QMainWindow):
             if not st:
                 continue
 
-            base_img.paste(img, st.pos())
+            base_img.paste(img, st.pos)
 
         self.thumbnail_cache[atlas_name] = base_img
 
@@ -1208,14 +1202,16 @@ class TextureStudio(QMainWindow):
         with BytesIO(texture.data) as dds_buffer:
             return Image.open(dds_buffer).convert("RGBA")
 
-    def getPilImage(self, atlas_name, createDebug=False):
+    def getPilImage(self, atlas_name, return_atlas=False, createDebug=False):
         """Returns rendered preview (rebuild if needed)"""
         
+        if return_atlas: # hacky way of getting a raw Atlas object into WriteWorker but i cba
+            return self.atlases[atlas_name]
+
         if atlas_name not in self.thumbnail_cache:
             atlas_item = self.atlas_list.currentItem()
-            if atlas_item:
-                dcx_file = Path(atlas_item.data(Qt.UserRole+1)).name
-                self.rebuildAtlas(atlas_name, dcx_file)
+            dcx_file = Path(atlas_item.data(Qt.UserRole+1)).name
+            self.rebuildAtlas(atlas_name, dcx_file)
 
         img = self.thumbnail_cache.get(atlas_name)
 
@@ -1223,7 +1219,7 @@ class TextureStudio(QMainWindow):
             img = self.getBaseImage(atlas=atlas_name)
 
         if createDebug:
-            img = createDebugGrid(img, self.subtextures[atlas_name])
+            img = createDebugGrid(img, self.atlases[atlas_name].subtextures)
 
         if self.alphaThreshold > 0:
             img = cleanByAlpha(img, threshold=self.alphaThreshold)
@@ -1266,15 +1262,16 @@ class TextureStudio(QMainWindow):
         # Load subtextures
         self.subtexture_list.blockSignals(True)
         self.subtexture_list.clear()
-        for key, val in self.subtextures.get(atlas_name, {}).items():
-            if self.btn_hideBlankIcons.isChecked() and val.blank:
+        for sub in self.atlases.get(atlas_name, Atlas).subtextures:
+            if self.btn_hideBlankIcons.isChecked() and sub.blank:
                 continue
+            name = sub.name
 
-            item = NaturalListItem(key)
-            item.setData(Qt.UserRole, key)
+            item = NaturalListItem(name)
+            item.setData(Qt.UserRole, name)
             item.setSizeHint(QSize(0, 30))
 
-            match self.isModified(dcx_file, atlas_name, key):
+            match self.isModified(dcx_file, atlas_name, name):
                 case Modified.REPLACED:
                     item.setForeground(Qt.yellow)
                     current.setForeground(Qt.yellow)
@@ -1303,7 +1300,7 @@ class TextureStudio(QMainWindow):
         
         try:
             name = current.data(Qt.UserRole)
-            st = self.subtextures[self.current_atlas][name]
+            st = self.atlases[self.current_atlas].fetch(name)
             atlas_img = self.getPilImage(self.current_atlas)
             dcx_file = self.atlas_list.currentItem().data(Qt.UserRole+1).name
         except KeyError:
@@ -1315,7 +1312,7 @@ class TextureStudio(QMainWindow):
 
         self.preview_label.setPixmap(pil2Qpixmap(cropped))
         self.current_crop = cropped
-        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, (st.x, st.y), img_type=ImageType.Subtexture))
+        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, st.pos, img_type=ImageType.Subtexture))
 
     def saveSelection(self):
         """Save current subtexture or whole atlas"""
@@ -1330,7 +1327,7 @@ class TextureStudio(QMainWindow):
         else: # No subtexture selected, export the full atlas   
             img_type = self.atlas_list.currentItem().data(Qt.UserRole+2)
             if img_type == ImageType.Atlas:
-                ok, choice = self.showSelectOptions("Select Export", f"The currently selected texture is an atlas.\nWould you like to export the whole image, " \
+                ok, choice = showSelectOptions("Select Export", f"The currently selected texture is an atlas.\nWould you like to export the whole image, " \
                                                     "or its subtextures?", ["Full Atlas", "All Subtextures"])
                 
                 if not ok:
@@ -1359,7 +1356,7 @@ class TextureStudio(QMainWindow):
             QMessageBox.warning(self, "Warning", "No atlas selected.")
             return
 
-        tasks = [(self.current_atlas, st) for st in self.subtextures.get(self.current_atlas, [])]
+        tasks = [(self.current_atlas, st) for st in self.atlases.get(self.current_atlas).subtextures]
         if not tasks:
             QMessageBox.information(self, "Info", f"No subtextures found for {self.current_atlas}.")
             return

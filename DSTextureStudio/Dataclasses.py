@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from textwrap import indent
 from typing import Optional
 from PIL import Image
 from pathlib import Path
@@ -6,6 +7,7 @@ from soulstruct.containers.tpf import TPFTexture
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
 from .Helpers import replaceTerms
+from .Enums import ImageType
 import xml.etree.ElementTree as ET
 
 @dataclass(slots=True)
@@ -120,6 +122,52 @@ class Atlas:
     texture: TPFTexture
     parent: Path
 
+    subtextures: list[SubTexture] = field(default_factory=list)
+
+    @property
+    def itype(self) -> ImageType:
+        """Checks if self Atlas object is an atlas with SubTextures or just a plain Texture"""
+        return ImageType.Atlas if self.count > 0 else ImageType.Texture
+
+    @property
+    def count(self) -> int:
+        """Returns number of child SubTexture objects."""
+        return len(self.subtextures)
+    
+    def add(self, subtexture: SubTexture) -> None:
+        """Appends a SubTexture to self list"""
+        self.subtextures.append(subtexture)
+
+    def fetch(self, name: str) -> SubTexture|None:
+        """Returns SubTexture object of a certain name belonging to parent Atlas"""
+        for sub in self.subtextures:
+            if sub.name == name:
+                return sub
+        return None
+    
+    def rename(self, name: str, new_name: str) -> SubTexture|None:
+        """Renames SubTextures of a certain name from the Atlas."""
+        for sub in self.subtextures:
+            if sub.name == name:
+                sub.name = new_name
+    
+    def rem(self, name: str) -> SubTexture|None:
+        """Removes SubTextures of a certain name from the Atlas. Returns like {}.pop()"""
+        for idx, sub in enumerate(self.subtextures):
+            if sub.name == name:
+                return self.subtextures.pop(idx)
+
+    def __repr__(self) -> str:
+        return (
+            f"Atlas(\n"
+            f"    name = {self.name}\n"
+            f"    parent = {self.parent}\n"
+            f"    subtexture count = {self.count()}\n"
+            f"    texture = \n{indent(self.texture.__repr__(), "        ")}\n"
+            f"    subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
+            f")"
+        )
+
 @dataclass(slots=True)
 class SubTexture:
     name: str
@@ -130,10 +178,11 @@ class SubTexture:
 
     img: Optional[Image.Image] = None
 
-    parent: Optional[str] = None
+    parent: Optional[str] = None # not used unless in custom. None will skip in buildOps, aka vanilla
     blank: bool = False
     half: Optional[bool] = False
 
+    @property
     def pos(self) -> tuple[int, int]:
         return (self.x, self.y)
 
@@ -146,3 +195,16 @@ class SubTexture:
         if self.img is None:
             raise Exception("SubTexture object does not contain an image.")
         atlas_img.paste(self.img, self.box(), mask=mask)
+
+    def __repr__(self) -> str:
+        return (
+            f"SubTexture(\n"
+            f"    name = {self.name}\n"
+            f"    parent = {self.parent}\n"
+            f"    image = {self.img}\n"
+            f"    coordinates = {self.pos}\n"
+            f"    dimensions = {self.width}x{self.height}\n"
+            f"    blank = {self.blank}\n"
+            f"    half = {self.half}\n"
+            f")"
+        )

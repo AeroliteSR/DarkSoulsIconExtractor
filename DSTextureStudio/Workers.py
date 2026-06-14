@@ -21,14 +21,14 @@ from DSTextureStudio.Helpers import *
 
 class LoadWorker(QObject):
     progress = Signal(int, str)   # percent, message
-    finished = Signal(object, object, object, object, str)  # atlases, subtextures, loaded dcx files, parsed xml data, error msg
+    finished = Signal(object, object, object, str)  # atlases, loaded dcx files, parsed xml data, error msg
 
     def __init__(self, file_mappings, game: Game):
         super().__init__()
         self.file_mappings = file_mappings
         self.game = game
         self.LOADED_DCX_FILES = {}
-        self.LAYOUT_FILES = {}
+        self.LAYOUT_DATA = {}
 
     def run(self):
         match self.game.type:
@@ -93,7 +93,6 @@ class LoadWorker(QObject):
     def processModern(self):
         try:
             atlases: dict[str, Atlas] = {}
-            subtextures: dict[str, dict[str, SubTexture]] = {}
             total_files = len(self.file_mappings)
 
             self.progress.emit(0, f'Loading {total_files} files...')
@@ -108,12 +107,12 @@ class LoadWorker(QObject):
                     self.progress.emit(percent, "Parsing layout XML...")
 
                     atlas_nodes = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
-                    self.LAYOUT_FILES[file['file']] = atlas_nodes
+                    self.LAYOUT_DATA[file['file']] = atlas_nodes
                     total_atlases = len(atlas_nodes)
 
                     if total_atlases == 0:
                         self.progress.emit(100, "No atlases found")
-                        self.finished.emit({}, {}, {}, {})
+                        self.finished.emit({}, {}, {})
                         return
 
                     for texture_atlas in atlas_nodes:
@@ -124,28 +123,28 @@ class LoadWorker(QObject):
                             self.progress.emit(int(f_idx / total_files * 100), f"{filename} not found, skipping.")
                             continue
 
-                        atlases[filename] = Atlas(name=filename, texture=textures_dict[filename], parent=file['file'])
-                        subtextures[filename] = {}
+                        subtextures = [SubTexture(name=Path(sub.get("name")).stem,
+                                                x=int(sub.get("x")),
+                                                y=int(sub.get("y")),
+                                                width=int(sub.get("width")),
+                                                height=int(sub.get("height")),
+                                                blank=False
+                                            ) for sub in texture_atlas.iter_subtextures()]
 
-                        for sub in texture_atlas.iter_subtextures():
-                            name = Path(sub.get("name")).stem
-
-                            subtextures[filename][name] = SubTexture(name=name,
-                                                                     x=int(sub.get("x")),
-                                                                     y=int(sub.get("y")),
-                                                                     width=int(sub.get("width")),
-                                                                     height=int(sub.get("height")),
-                                                                     blank=False)
+                        atlases[filename] = Atlas(name=filename,
+                                                  texture=textures_dict[filename],
+                                                  parent=file['file'],
+                                                  subtextures=subtextures
+                                                )
 
                 elif isinstance(file, Path):
                     textures_dict: dict = self.generateTextDict(file, percent)
                     # add any textures that were not included in the layout
                     for name, texture in textures_dict.items():
                         if name not in atlases:
-                            atlases[name] = Atlas(name=name, texture=texture, parent=file)
-                            subtextures[name] = {}  # no layout info since single textures go to atlases
+                            atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
 
-            self.finished.emit(atlases, subtextures, self.LOADED_DCX_FILES, self.LAYOUT_FILES, "")
+            self.finished.emit(atlases, self.LOADED_DCX_FILES, self.LAYOUT_DATA, "")
             self.progress.emit(100, 'Successfully loaded all files!')
 
         except Exception as e:
@@ -155,7 +154,6 @@ class LoadWorker(QObject):
     def processOld(self):  
         try:
             atlases: dict[str, Atlas] = {}
-            subtextures: dict[str, dict[str, SubTexture]] = {}
             total_files = len(self.file_mappings)
 
             for f_idx, file in enumerate(self.file_mappings, 1):
@@ -163,8 +161,7 @@ class LoadWorker(QObject):
                 textures_dict: dict = self.generateTextDict(file, percent)
 
                 for name, texture in textures_dict.items():
-                    atlases[name] = Atlas(name=name, texture=texture, parent=file)
-                    subtextures[name] = {}
+                    atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[])
                     dds = texture.get_dds()
                     image = Image.open(BytesIO(dds.to_bytes())).convert("RGBA")
 
@@ -190,29 +187,29 @@ class LoadWorker(QObject):
                             opacity_ratio = np.count_nonzero(alpha) / alpha.size
                             isBlank: bool = opacity_ratio < 0.01
 
-                            subtextures[name][str(idx)] = SubTexture(name=name,
-                                                                     x=x,
-                                                                     y=y,
-                                                                     width=tile_width,
-                                                                     height=tile_height,
-                                                                     blank=isBlank)
-                            
+                            atlases[name].add(SubTexture(name=str(idx),
+                                                         x=x,
+                                                         y=y,
+                                                         width=tile_width,
+                                                         height=tile_height,
+                                                         blank=isBlank
+                                                    ))
+            
                         self.progress.emit(percent, f"Processed {name}")
 
-            self.finished.emit(atlases, subtextures, self.LOADED_DCX_FILES, {}, "")
+            self.finished.emit(atlases, self.LOADED_DCX_FILES, {}, "")
 
         except Exception as e:
             self.progress.emit(0, f"Error: {e}")
-            self.finished.emit({}, {}, {}, {}, traceback.format_exc())
+            self.finished.emit({}, {}, {}, traceback.format_exc())
 
 class ExtractWorker(QObject):
     progress = Signal(int, str) # percent, message
     finished = Signal(bool) # success
 
-    def __init__(self, atlases, subtextures, output_dir, loader, tasks=None, mode=ExportMode.SUBTEXTURE, filetype='png', gridOverlay=False):
+    def __init__(self, atlases, output_dir, loader, tasks=None, mode=ExportMode.SUBTEXTURE, filetype='png', gridOverlay=False):
         super().__init__()
         self.atlases = atlases
-        self.subtextures = subtextures
         self.output_dir = Path(output_dir)
         self.pilLoader = loader
         self.tasks = tasks if tasks is not None else []
@@ -245,12 +242,12 @@ class ExtractWorker(QObject):
                         self.tasks.append((atlas_name, None))
 
                 case ExportMode.SUBTEXTURE:
-                    if not self.subtextures:
+                    if not any([a.count>0 for a in self.atlases.values()]):
                         self.finished.emit(False)
                         return
 
-                    for atlas_name,_ in self.atlases.items():
-                            for st in self.subtextures.get(atlas_name, []):
+                    for atlas_name,_atlas in self.atlases.items():
+                            for st in _atlas.subtextures:
                                 self.tasks.append((atlas_name, st))
 
         total = len(self.tasks)
@@ -277,28 +274,26 @@ class ExtractWorker(QObject):
                             message = f"Exported atlas: {atlas_name}"
 
                             if self.gridOverlay:
-                                atlas_img = createDebugGrid(atlas_img, self.subtextures[atlas_name])
+                                atlas_img = createDebugGrid(atlas_img, self.atlases[atlas_name].subtextures)
 
                         case ExportMode.SUBTEXTURE:
                             out_path = self.output_dir / atlas_name
-                            filename = st
-                            message = f"Exported {st} from {atlas_name}"
-                            st: SubTexture = self.subtextures[atlas_name][st]
+                            filename = st.name
+                            message = f"Exported {filename} from {atlas_name}"
                             atlas_img = atlas_img.crop(st.box()) # crop if in subtexture mode
 
                     self.exportImg(image=atlas_img, filename=filename, out_path=out_path, progress=percent, message=message)
 
         self.finished.emit(True)
 
-class ReplaceWorker(QObject):
+class WriteWorker(QObject):
     finished = Signal(bool, str, Path)  # success, message
 
-    def __init__(self, new_atlases, replacements, additions, subtextures, loaded_files, layouts, getPilImage, game, resolutions):
+    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, resolutions):
         super().__init__()
         self.new_atlases = new_atlases
         self.replacements = replacements
         self.additions = additions
-        self.subtextures = subtextures
         self.getPilImage = getPilImage
         self.LOADED_DCX_FILES = loaded_files
         self.LAYOUT_FILES = layouts
@@ -442,7 +437,7 @@ class ReplaceWorker(QObject):
 
                     for sub_name, new_img in ops["replacements"].items():
                         if sub_name != "*Self*":  # subtexture replacement
-                            st = self.subtextures.get(atlas_name, {}).get(sub_name)
+                            st = self.getPilImage(atlas_name, return_atlas=True).fetch(sub_name) # im so sorry
                             if not st:
                                 raise Exception(f"Could not resolve subtexture '{sub_name}' in atlas '{atlas_name}'")
                             atlas_img.paste(new_img, (st.x, st.y))
