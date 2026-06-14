@@ -4,15 +4,16 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 | Game       | Preview | Export | Replace | Add |
 |------------|---------|--------|---------|-----|
 | DeS        |   ✅    |  ✅    |   ❌    | ❌  |
-| DS1        |   ✅    |  ✅    |   ✅    | ✅  |
+| DS1        |   ✅    |  ✅    |   ✅    | ✅  | ⚠️
 | DS2        |   ✅    |  ✅    |   ✅    | ❌  |
-| DS3        |   ✅    |  ✅    |   ✅    | ✅  |
+| DS3        |   ✅    |  ✅    |   ✅    | ✅  | ⚠️
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |
 | NR         |   ✅    |  ✅    |   ✅    | ✅  |  
   
-*DS1 refers to both PTDE and Remastered, and DS2 refers to both the original and SOTFS
+*DS1 refers to both PTDE and Remastered, and DS2 refers to both the original and SOTFS  
+⚠️ = Partial support. These games have the ability to add custom icons, but only for specific atlases whose standard dimensions are mapped.
 
 # Prerequisites (pip install):
 rich  
