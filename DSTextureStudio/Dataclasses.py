@@ -38,7 +38,7 @@ class AtlasLayout:
         obj.add_subtextures(subtextures)
         return obj
 
-    def build(layout_objs: list[AtlasLayout], root: Path|str, output: Path):
+    def build(layout_objs: list[AtlasLayout], root: Path|str, output: Path) -> None:
         """
         Writes a list of AtlasLayouts to sblytbnd.dcx
 
@@ -69,13 +69,14 @@ class AtlasLayout:
 
         binder.write(output)
 
-    def iter_subtextures(self):
+    def iter_subtextures(self) -> list[ET.Element[str]]:
         return self.element.findall("SubTexture")
 
     def has_subtexture(self, name: str) -> bool:
         return any(st.get("name") == name for st in self.iter_subtextures())
 
-    def add_subtextures(self, subtextures: list[SubTexture]):
+    def add_subtextures(self, subtextures: list[SubTexture]) -> None:
+        """Adds a list of SubTexture objects to the parent AtlasLayout's Element"""
         atlas = self.element
         for sub in subtextures:
             name = sub.name
@@ -109,6 +110,7 @@ class AtlasLayout:
             f"    name = {self.name}\n"
             f"    imagePath = {self.imagePath}\n"
             f"    element = {self.element.__repr__()}\n"
+            f"    subtexture count = {len(self.iter_subtextures())}\n"
             f")"
         )
 
@@ -132,7 +134,7 @@ class SubTexture:
     blank: bool = False
     half: Optional[bool] = False
 
-    def pos(self):
+    def pos(self) -> tuple[int, int]:
         return (self.x, self.y)
 
     def box(self, padding: int = 0) -> tuple[int, int, int, int]:
