@@ -4,9 +4,9 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 | Game       | Preview | Export | Replace | Add |
 |------------|---------|--------|---------|-----|
 | DeS        |   ✅    |  ✅    |   ❌    | ❌  |
-| DS1        |   ✅    |  ✅    |   ✅    | ⚠️  |
+| DS1 ⚠️    |   ✅    |  ✅    |   ✅    | ✅  |
 | DS2        |   ✅    |  ✅    |   ✅    | ❌  |
-| DS3        |   ✅    |  ✅    |   ✅    | ⚠️  |
+| DS3 ⚠️    |   ✅    |  ✅    |   ✅    | ✅  |
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |
