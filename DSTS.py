@@ -475,7 +475,7 @@ class TextureStudio(QMainWindow):
             return
 
         files = list(self.LOADED_DCX_FILES.keys())
-        if len(files) > 1:
+        if len(files) > 1 and self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
             ok, parent = showSelectOptions("Select parent file", "Files:", files)
             if not ok:
                 return
@@ -599,6 +599,7 @@ class TextureStudio(QMainWindow):
             height=h,
             parent=atlas_name,
             img=img,
+            vanilla=False,
             half=half
         )
 

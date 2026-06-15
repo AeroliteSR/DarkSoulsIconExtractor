@@ -124,11 +124,13 @@ class LoadWorker(QObject):
                             continue
 
                         subtextures = [SubTexture(name=Path(sub.get("name")).stem,
-                                                x=int(sub.get("x")),
-                                                y=int(sub.get("y")),
-                                                width=int(sub.get("width")),
-                                                height=int(sub.get("height")),
-                                                blank=False
+                                                  parent=filename,
+                                                  x=int(sub.get("x")),
+                                                  y=int(sub.get("y")),
+                                                  width=int(sub.get("width")),
+                                                  height=int(sub.get("height")),
+                                                  blank=False,
+                                                  vanilla=True,
                                             ) for sub in texture_atlas.iter_subtextures()]
 
                         atlases[filename] = Atlas(name=filename,
@@ -188,11 +190,13 @@ class LoadWorker(QObject):
                             isBlank: bool = opacity_ratio < 0.01
 
                             atlases[name].add(SubTexture(name=str(idx),
+                                                         parent=name,
                                                          x=x,
                                                          y=y,
                                                          width=tile_width,
                                                          height=tile_height,
-                                                         blank=isBlank
+                                                         blank=isBlank,
+                                                         vanilla=True
                                                     ))
             
                         self.progress.emit(percent, f"Processed {name}")
@@ -329,7 +333,7 @@ class WriteWorker(QObject):
             additions_by_atlas = {}
 
             for sub in add_data["additions"]:
-                if sub.parent is None:
+                if sub.vanilla:
                     continue
 
                 additions_by_atlas.setdefault(sub.parent, []).append(sub)
@@ -422,7 +426,12 @@ class WriteWorker(QObject):
                 base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
 
                 if data["new_atlases"]:
-                    base.textures.extend([t.texture for t in data["new_atlases"]])
+                    if self.game.name == "Dark Souls 2":
+                        for t in data['new_atlases']:
+                            t.writetpf()
+                        continue # hacky but whatever i cba
+                    else:
+                        base.textures.extend([t.texture for t in data["new_atlases"]])
 
                 atlas_cache = {}
 

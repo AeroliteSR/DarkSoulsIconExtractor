@@ -4,17 +4,17 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 | Game       | Preview | Export | Replace | Add |
 |------------|---------|--------|---------|-----|
 | DeS        |   ✅    |  ✅    |   ❌    | ❌  |
-| DS1 ⚠️    |   ✅    |  ✅    |   ✅    | ✅  |
-| DS2        |   ✅    |  ✅    |   ✅    | ❌  |
-| DS3 ⚠️    |   ✅    |  ✅    |   ✅    | ✅  |
+| DS1        |   ✅    |  ✅    |   ✅    | ✅  |
+| DS2        |   ✅    |  ✅    |   ✅    | ⚠️  |
+| DS3        |   ✅    |  ✅    |   ✅    | ✅  |
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |
 | NR         |   ✅    |  ✅    |   ✅    | ✅  |  
   
 *DS1 refers to both PTDE and Remastered, and DS2 refers to both the original and SOTFS  
-⚠️ = Partial support. These games have the ability to add custom icons, but only for specific atlases whose standard dimensions are mapped.
-
+Note that for DS1 and DS3, icons can only be appended to atlases whose standard dimensions are mapped. Non-uniform ones aren't supported.  
+  
 # Prerequisites (pip install):
 rich  
 constrata  
@@ -71,8 +71,16 @@ changes as a tpf/dcx file, which should work as is. Some testing showed that Wit
 Pressing `Add` will once again prompt you for an image, this time to append as a completely new entry. After giving your new subtexture a name, 
 DSTS will find free space in the atlas to place it, enlarging the image if it doesn't find any. For modern games, the subtexture will 
 automatically be added to the layout (.sblytbnd) file as well. For the older games, it will simply attempt to add a new tile, respecting the existing 
-grid dimensions. Currently doesn't work on unmapped, non-uniform atlases.  
+grid dimensions. Currently doesn't work on unmapped, non-uniform atlases. In addition, instead of appending a new icon, you can "define" an icon from an 
+existing image.  
   
+You can also add your own custom atlases, though this feature is pretty experimental.
+  
+### Extra note about adding to DS2
+The way Dark Souls 2 works goes completely against the workflow for the other games. As such, despite getting out "workable" functionality for it, 
+the system is very hacky and not at all intuitive. You have to load at least 1 file from DS2 to act as your new texture's "parent" to build from. During the 
+Apply Changes process, all new 'atlas' additions are written at once as standalone .tpf files. It therefore skips any other changes you may have made to the 
+project, such as texture replacements. I may get around to fixing it up one day.  
   
 # Credits:
 A myriad thanks to Kmstr and Managarm for their suggestions, feedback and testing throughout development! :))  

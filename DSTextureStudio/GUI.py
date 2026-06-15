@@ -272,7 +272,7 @@ def showQuery(title, text):
     return QMessageBox.question(None, title, text, QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
 
 def showSelectOptions(title, text, options):
-    choice, ok = QInputDialog.getItem(None, title, text, options, 0, False)
+    choice, ok = QInputDialog.getItem(None, title, text, [str(i) for i in options], 0, False)
     return ok, choice
 
 def gameTypeDialog() -> Game:

@@ -3,7 +3,7 @@ from textwrap import indent
 from typing import Optional
 from PIL import Image
 from pathlib import Path
-from soulstruct.containers.tpf import TPFTexture
+from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
 from .Helpers import replaceTerms
@@ -156,6 +156,13 @@ class Atlas:
         for idx, sub in enumerate(self.subtextures):
             if sub.name == name:
                 return self.subtextures.pop(idx)
+            
+    def writetpf(self, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
+        """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files."""
+        TPF(platform=platform,
+            encoding_type=encoding,
+            tpf_flags=flags,
+            textures=[self.texture]).write(f"{self.parent.parent/self.name}.tpf")
 
     def __repr__(self) -> str:
         return (
@@ -178,9 +185,11 @@ class SubTexture:
 
     img: Optional[Image.Image] = None
 
-    parent: Optional[str] = None # not used unless in custom. None will skip in buildOps, aka vanilla
+    parent: Optional[str] = None # name of parent atlas
+    vanilla: Optional[bool] = False # set to True on load. Custom additions are False, and therefore can be filtered for 
+
     blank: bool = False
-    half: Optional[bool] = False
+    half: Optional[bool] = False # what even is this bro
 
     @property
     def pos(self) -> tuple[int, int]:
