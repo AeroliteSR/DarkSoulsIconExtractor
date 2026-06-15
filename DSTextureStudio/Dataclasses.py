@@ -138,24 +138,31 @@ class Atlas:
         """Appends a SubTexture to self list"""
         self.subtextures.append(subtexture)
 
+    def match(self, name: str) -> tuple[SubTexture, int]|None:
+        """Helper function to find SubTexture and index from self list"""
+        for idx, sub in enumerate(self.subtextures):
+            if sub.name == name:
+                return sub,idx
+        return None
+
     def fetch(self, name: str) -> SubTexture|None:
         """Returns SubTexture object of a certain name belonging to parent Atlas"""
-        for sub in self.subtextures:
-            if sub.name == name:
-                return sub
-        return None
+        return self.match(name)[0]
     
     def rename(self, name: str, new_name: str) -> SubTexture|None:
         """Renames SubTextures of a certain name from the Atlas."""
-        for sub in self.subtextures:
-            if sub.name == name:
-                sub.name = new_name
-    
+        sub = self.match(name)[0]
+        sub.name = new_name
+        
     def rem(self, name: str) -> SubTexture|None:
         """Removes SubTextures of a certain name from the Atlas. Returns like {}.pop()"""
-        for idx, sub in enumerate(self.subtextures):
-            if sub.name == name:
-                return self.subtextures.pop(idx)
+        idx = self.match(name)[1]
+        return self.subtextures.pop(idx)
+
+    def replace(self, name: str, image: Image.Image) -> None:
+        """Finds SubTexture object of 'name' and replaces its 'img' field with a provided image"""
+        sub = self.match(name)[0]
+        sub.img = image
             
     def writetpf(self, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
         """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files."""
