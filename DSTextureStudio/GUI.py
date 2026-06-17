@@ -702,6 +702,14 @@ class TextureListWidget(QListWidget):
 
         self.repositionButton()
 
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+
+        if event.key() in (Qt.Key_Up, Qt.Key_Down):
+            item = self.currentItem()
+            if item:
+                self.itemActivated.emit(item)
+
     def showMenu(self):
         pos = self.add_button.mapToGlobal(QPoint(0, -self.menu.sizeHint().height()))
         self.menu.popup(pos)

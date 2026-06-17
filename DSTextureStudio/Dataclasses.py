@@ -147,22 +147,27 @@ class Atlas:
 
     def fetch(self, name: str) -> SubTexture|None:
         """Returns SubTexture object of a certain name belonging to parent Atlas"""
-        return self.match(name)[0]
+        sub = self.match(name)
+        return sub[0] if sub else None
     
-    def rename(self, name: str, new_name: str) -> SubTexture|None:
+    def rename(self, name: str, new_name: str) -> None:
         """Renames SubTextures of a certain name from the Atlas."""
-        sub = self.match(name)[0]
-        sub.name = new_name
+        sub = self.match(name)
+        if sub:
+            sub[0].name = new_name
         
     def rem(self, name: str) -> SubTexture|None:
         """Removes SubTextures of a certain name from the Atlas. Returns like {}.pop()"""
-        idx = self.match(name)[1]
-        return self.subtextures.pop(idx)
+        idx = self.match(name)
+        if idx:
+            return self.subtextures.pop(idx[1])
+        return None
 
     def replace(self, name: str, image: Image.Image) -> None:
         """Finds SubTexture object of 'name' and replaces its 'img' field with a provided image"""
-        sub = self.match(name)[0]
-        sub.img = image
+        sub = self.match(name)
+        if sub:
+            sub[0].img = image
             
     def writetpf(self, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
         """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files."""
@@ -176,7 +181,7 @@ class Atlas:
             f"Atlas(\n"
             f"    name = {self.name}\n"
             f"    parent = {self.parent}\n"
-            f"    subtexture count = {self.count()}\n"
+            f"    subtexture count = {self.count}\n"
             f"    texture = \n{indent(self.texture.__repr__(), "        ")}\n"
             f"    subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
@@ -217,6 +222,7 @@ class SubTexture:
             f"SubTexture(\n"
             f"    name = {self.name}\n"
             f"    parent = {self.parent}\n"
+            f"    is vanilla = {self.vanilla}\n"
             f"    image = {self.img}\n"
             f"    coordinates = {self.pos}\n"
             f"    dimensions = {self.width}x{self.height}\n"
