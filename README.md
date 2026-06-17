@@ -74,6 +74,8 @@ automatically be added to the layout (.sblytbnd) file as well. For the older gam
 grid dimensions. Currently doesn't work on unmapped, non-uniform atlases. In addition, instead of appending a new icon, you can "define" an icon from an 
 existing image.  
   
+*Icon #0 in Dark Souls generally corresponds to the "Empty Icon" that's used if nothing is held in that slot. For this reason, you probably want to avoid modifying it if you're trying to add a custom icon.  
+  
 You can also add your own custom atlases, though this feature is pretty experimental.
   
 ### Extra note about adding to DS2
