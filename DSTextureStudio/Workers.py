@@ -7,7 +7,7 @@ from copy import deepcopy
 from tempfile import NamedTemporaryFile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-import traceback
+from PIL import Image
 # GUI
 from PySide6.QtCore import QObject, Signal
 # Soulstruct
@@ -15,9 +15,11 @@ from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture
 from soulstruct.dcx import core
 # Custom
 from DSTextureStudio.GameInfo import Maps, Types
-from DSTextureStudio.Dataclasses import *
-from DSTextureStudio.Enums import *
-from DSTextureStudio.Helpers import *
+from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
+from DSTextureStudio.Enums import ExportMode, ResFormat, Resolution, Game, GameType
+from DSTextureStudio.Helpers import replaceTerms, createDebugGrid, getLayoutData
+from DSTextureStudio.GUI import getOutputPath
+from DSTextureStudio.trace import format_exc_clean
 
 class LoadWorker(QObject):
     progress = Signal(int, str)   # percent, message
@@ -31,13 +33,16 @@ class LoadWorker(QObject):
         self.LAYOUT_DATA = {}
 
     def run(self):
-        match self.game.type:
-            case GameType.MODERN:
-                self.processModern()
-            case GameType.OLD | GameType.PS:
-                self.processOld()
-            case _:
-                self.processOld()
+        try:
+            match self.game.type:
+                case GameType.MODERN:
+                    self.processModern()
+                case GameType.OLD | GameType.PS:
+                    self.processOld()
+                case _:
+                    self.processOld()
+        except:
+            self.finished.emit({}, {}, {}, format_exc_clean())
 
     def handleUnpack(self, path):
         if self.game.type == GameType.PS:
@@ -91,130 +96,121 @@ class LoadWorker(QObject):
         return textures_dict
 
     def processModern(self):
-        try:
-            atlases: dict[str, Atlas] = {}
-            total_files = len(self.file_mappings)
+        raise ValueError("hewoo")
+        atlases: dict[str, Atlas] = {}
+        total_files = len(self.file_mappings)
 
-            self.progress.emit(0, f'Loading {total_files} files...')
-            for f_idx, file in enumerate(self.file_mappings, 1):
-                percent = int(f_idx / total_files * 100 - 1)
-                if isinstance(file, dict):
-                    layout_path = file['layout']
-                    textures_dict: dict = self.generateTextDict(file['file'], percent)
+        self.progress.emit(0, f'Loading {total_files} files...')
+        for f_idx, file in enumerate(self.file_mappings, 1):
+            percent = int(f_idx / total_files * 100 - 1)
+            if isinstance(file, dict):
+                layout_path = file['layout']
+                textures_dict: dict = self.generateTextDict(file['file'], percent)
 
-                    layout_xml = getLayoutData(layout_path)
-                    root = ET.fromstring(layout_xml, parser=ET.XMLParser(encoding="utf-8"))
-                    self.progress.emit(percent, "Parsing layout XML...")
+                layout_xml = getLayoutData(layout_path)
+                root = ET.fromstring(layout_xml, parser=ET.XMLParser(encoding="utf-8"))
+                self.progress.emit(percent, "Parsing layout XML...")
 
-                    atlas_nodes = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
-                    self.LAYOUT_DATA[file['file']] = atlas_nodes
-                    total_atlases = len(atlas_nodes)
+                atlas_nodes = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
+                self.LAYOUT_DATA[file['file']] = atlas_nodes
+                total_atlases = len(atlas_nodes)
 
-                    if total_atlases == 0:
-                        self.progress.emit(100, "No atlases found")
-                        self.finished.emit({}, {}, {})
-                        return
+                if total_atlases == 0:
+                    self.progress.emit(100, "No atlases found")
+                    self.finished.emit({}, {}, {})
+                    return
 
-                    for texture_atlas in atlas_nodes:
-                        filepath = texture_atlas.imagePath
-                        filename = Path(filepath).stem
+                for texture_atlas in atlas_nodes:
+                    filepath = texture_atlas.imagePath
+                    filename = Path(filepath).stem
 
-                        if filename not in textures_dict:
-                            self.progress.emit(int(f_idx / total_files * 100), f"{filename} not found, skipping.")
-                            continue
+                    if filename not in textures_dict:
+                        self.progress.emit(int(f_idx / total_files * 100), f"{filename} not found, skipping.")
+                        continue
 
-                        subtextures = [SubTexture(name=Path(sub.get("name")).stem,
-                                                  parent=filename,
-                                                  x=int(sub.get("x")),
-                                                  y=int(sub.get("y")),
-                                                  width=int(sub.get("width")),
-                                                  height=int(sub.get("height")),
-                                                  blank=False,
-                                                  vanilla=True,
-                                            ) for sub in texture_atlas.iter_subtextures()]
+                    subtextures = [SubTexture(name=Path(sub.get("name")).stem,
+                                                parent=filename,
+                                                x=int(sub.get("x")),
+                                                y=int(sub.get("y")),
+                                                width=int(sub.get("width")),
+                                                height=int(sub.get("height")),
+                                                blank=False,
+                                                vanilla=True,
+                                        ) for sub in texture_atlas.iter_subtextures()]
 
-                        atlases[filename] = Atlas(name=filename,
-                                                  texture=textures_dict[filename],
-                                                  parent=file['file'],
-                                                  subtextures=subtextures
-                                                )
+                    atlases[filename] = Atlas(name=filename,
+                                                texture=textures_dict[filename],
+                                                parent=file['file'],
+                                                subtextures=subtextures
+                                            )
 
-                elif isinstance(file, Path):
-                    textures_dict: dict = self.generateTextDict(file, percent)
-                    # add any textures that were not included in the layout
-                    for name, texture in textures_dict.items():
-                        if name not in atlases:
-                            atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
+            elif isinstance(file, Path):
+                textures_dict: dict = self.generateTextDict(file, percent)
+                # add any textures that were not included in the layout
+                for name, texture in textures_dict.items():
+                    if name not in atlases:
+                        atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
 
-            self.finished.emit(atlases, self.LOADED_DCX_FILES, self.LAYOUT_DATA, "")
-            self.progress.emit(100, 'Successfully loaded all files!')
-
-        except Exception as e:
-            self.progress.emit(0, f"Error: {e}")
-            self.finished.emit({}, {}, {}, {}, traceback.format_exc())
+        self.finished.emit(atlases, self.LOADED_DCX_FILES, self.LAYOUT_DATA, "")
+        self.progress.emit(100, 'Successfully loaded all files!')
 
     def processOld(self):  
-        try:
-            atlases: dict[str, Atlas] = {}
-            total_files = len(self.file_mappings)
+        atlases: dict[str, Atlas] = {}
+        total_files = len(self.file_mappings)
 
-            for f_idx, file in enumerate(self.file_mappings, 1):
-                percent = int(f_idx / total_files * 100 - 1)
-                textures_dict: dict = self.generateTextDict(file, percent)
+        for f_idx, file in enumerate(self.file_mappings, 1):
+            percent = int(f_idx / total_files * 100 - 1)
+            textures_dict: dict = self.generateTextDict(file, percent)
 
-                for name, texture in textures_dict.items():
-                    atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[])
-                    dds = texture.get_dds()
-                    image = Image.open(BytesIO(dds.to_bytes())).convert("RGBA")
+            for name, texture in textures_dict.items():
+                atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[])
+                dds = texture.get_dds()
+                image = Image.open(BytesIO(dds.to_bytes())).convert("RGBA")
 
-                    texmap = Maps.TextureDimensions[self.game.name]
-                    dimensions = texmap.get(name, None)
-                    if dimensions:
-                        tile_width, tile_height = dimensions['width'], dimensions['height']
+                texmap = Maps.TextureDimensions[self.game.name]
+                dimensions = texmap.get(name, None)
+                if dimensions:
+                    tile_width, tile_height = dimensions['width'], dimensions['height']
 
-                        atlas_width, atlas_height = dds.header.width, dds.header.height
-                        tiles_per_row = atlas_width // tile_width
-                        tiles_per_column = atlas_height // tile_height
+                    atlas_width, atlas_height = dds.header.width, dds.header.height
+                    tiles_per_row = atlas_width // tile_width
+                    tiles_per_column = atlas_height // tile_height
 
-                        total_tiles = tiles_per_row * tiles_per_column
+                    total_tiles = tiles_per_row * tiles_per_column
 
-                        for idx in range(total_tiles):
-                            row = idx // tiles_per_row
-                            col = idx % tiles_per_row
-                            x = col * tile_width
-                            y = row * tile_height
+                    for idx in range(total_tiles):
+                        row = idx // tiles_per_row
+                        col = idx % tiles_per_row
+                        x = col * tile_width
+                        y = row * tile_height
 
-                            tile = image.crop((x, y, x + tile_width, y + tile_height))
-                            alpha = np.array(tile.getchannel("A"))
-                            opacity_ratio = np.count_nonzero(alpha) / alpha.size
-                            isBlank: bool = opacity_ratio < 0.01
+                        tile = image.crop((x, y, x + tile_width, y + tile_height))
+                        alpha = np.array(tile.getchannel("A"))
+                        opacity_ratio = np.count_nonzero(alpha) / alpha.size
+                        isBlank: bool = opacity_ratio < 0.01
 
-                            atlases[name].add(SubTexture(name=str(idx),
-                                                         parent=name,
-                                                         x=x,
-                                                         y=y,
-                                                         width=tile_width,
-                                                         height=tile_height,
-                                                         blank=isBlank,
-                                                         vanilla=True
-                                                    ))
-            
-                        self.progress.emit(percent, f"Processed {name}")
+                        atlases[name].add(SubTexture(name=str(idx),
+                                                        parent=name,
+                                                        x=x,
+                                                        y=y,
+                                                        width=tile_width,
+                                                        height=tile_height,
+                                                        blank=isBlank,
+                                                        vanilla=True
+                                                ))
+        
+                    self.progress.emit(percent, f"Processed {name}")
 
-            self.finished.emit(atlases, self.LOADED_DCX_FILES, {}, "")
-
-        except Exception as e:
-            self.progress.emit(0, f"Error: {e}")
-            self.finished.emit({}, {}, {}, traceback.format_exc())
+        self.finished.emit(atlases, self.LOADED_DCX_FILES, {}, "")
 
 class ExtractWorker(QObject):
     progress = Signal(int, str) # percent, message
     finished = Signal(bool) # success
 
-    def __init__(self, atlases, output_dir, loader, tasks=None, mode=ExportMode.SUBTEXTURE, filetype='png', gridOverlay=False):
+    def __init__(self, atlases, output_dir: Path, loader, tasks=None, mode=ExportMode.SUBTEXTURE, filetype='png', gridOverlay=False):
         super().__init__()
         self.atlases = atlases
-        self.output_dir = Path(output_dir)
+        self.output_dir = output_dir
         self.pilLoader = loader
         self.tasks = tasks if tasks is not None else []
         self.mode = mode
@@ -262,9 +258,11 @@ class ExtractWorker(QObject):
             match self.filetype:
                 case 'dds':
                     texture: TPFTexture = self.atlases[atlas_name].texture
-                    output_path = Path(self.output_dir) / ".Atlases" / f"{atlas_name}.dds"
-                    output_path.parent.mkdir(parents=True, exist_ok=True)
-                    texture.write_dds(output_path)
+                    output_path = getOutputPath()
+                    if not output_path:
+                        return
+                    output_path.mkdir(parents=True, exist_ok=True)
+                    texture.write_dds(output_path / f"{atlas_name}.dds")
                     self.progress.emit(100, f"Exported atlas: {atlas_name}")
 
                 case _:
@@ -273,7 +271,7 @@ class ExtractWorker(QObject):
 
                     match self.mode:
                         case ExportMode.ATLAS:
-                            out_path = self.output_dir / '.Atlases'
+                            out_path = self.output_dir
                             filename = atlas_name
                             message = f"Exported atlas: {atlas_name}"
 
@@ -288,12 +286,12 @@ class ExtractWorker(QObject):
 
                     self.exportImg(image=atlas_img, filename=filename, out_path=out_path, progress=percent, message=message)
 
-        self.finished.emit(True)
+        self.finished.emit(True, self.output_dir)
 
 class WriteWorker(QObject):
     finished = Signal(bool, str, Path)  # success, message
 
-    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, resolutions):
+    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, resolutions, output):
         super().__init__()
         self.new_atlases = new_atlases
         self.replacements = replacements
@@ -303,6 +301,7 @@ class WriteWorker(QObject):
         self.LAYOUT_FILES = layouts
         self.game = game
         self.RESOLUTIONS = resolutions
+        self.output_dir = output
 
     def buildOperations(self):
         print("Building operations map...")
@@ -394,9 +393,7 @@ class WriteWorker(QObject):
             AtlasLayout.build(
                 layout_objs=layout_objs,
                 root=root,
-                output=base_name.with_name(
-                    base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
-                )
+                output=self.output_dir / base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
             )
 
         print("\nFinished building operations.")
@@ -419,10 +416,8 @@ class WriteWorker(QObject):
         return dcx_ops
 
     def run(self):
-        self.outputLoc = None
         try:
             for base_path, data in self.buildOperations().items():
-                self.outputLoc = base_path.parent
                 base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
 
                 if data["new_atlases"]:
@@ -465,9 +460,9 @@ class WriteWorker(QObject):
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
 
-                base.write(base_path)
+                base.write(self.output_dir / base_path.name)
 
-            self.finished.emit(True, "All changes applied successfully!", self.outputLoc)
+            self.finished.emit(True, "All changes applied successfully!", self.output_dir)
 
         except Exception:
-            self.finished.emit(False, traceback.format_exc(), self.outputLoc)
+            self.finished.emit(False, format_exc_clean(), self.output_dir)

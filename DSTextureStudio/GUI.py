@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
-QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem)
+QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
 from PySide6.QtGui import QPalette, QPainter, QAction
 from .GameInfo import Types
 from .Enums import Game, ImageType
 import re
+from pathlib import Path
 
 class NaturalListItem(QListWidgetItem):
     def __init__(self, text):
@@ -259,62 +260,6 @@ class Palettes():
         background: none;
     }
     """
-
-def showError(text, title="Error", _type=QMessageBox.Critical):
-    """Error popup with specified text"""
-    msg = QMessageBox()
-    msg.setIcon(_type)
-    msg.setWindowTitle(title) 
-    msg.setText(text) 
-    msg.exec()
-
-def showQuery(title, text):
-    return QMessageBox.question(None, title, text, QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-
-def showSelectOptions(title, text, options):
-    choice, ok = QInputDialog.getItem(None, title, text, [str(i) for i in options], 0, False)
-    return ok, choice
-
-def gameTypeDialog() -> Game:
-    options = [
-        "Demon's Souls",
-        "Dark Souls 1",
-        "Dark Souls 2",
-        "Dark Souls 3",
-        "Bloodborne",
-        "Sekiro",
-        "Elden Ring",
-        "Nightreign"
-    ]
-
-    dialog = QDialog(None)
-    dialog.setWindowTitle("Select Game Type")
-    dialog.setModal(True)
-
-    layout = QVBoxLayout(dialog)
-
-    label = QLabel("Choose one of the following:")
-    combo = QComboBox()
-    combo.setStyleSheet("""QComboBox {padding: 3px 0px 3px 6px;}""")
-    combo.addItems(options)
-
-    buttons = QDialogButtonBox(
-        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-    )
-
-    layout.addWidget(label)
-    layout.addWidget(combo)
-    layout.addWidget(buttons)
-
-    buttons.accepted.connect(dialog.accept)
-    buttons.rejected.connect(dialog.reject)
-
-    result = dialog.exec()
-
-    if result == QDialog.Accepted:
-        return Game(combo.currentText())
-
-    return Game(None)
 
 class SearchWindow(QWidget):
     results = Signal(str, bool) # text, atlas search mode
@@ -721,3 +666,66 @@ class TextureListWidget(QListWidget):
     def repositionButton(self, margin=4):
         self.add_button.move(self.width() - self.add_button.width() - margin, self.height() - self.add_button.height() - margin)
 
+
+def showError(text, title="Error", _type=QMessageBox.Critical):
+    """Error popup with specified text"""
+    msg = QMessageBox()
+    msg.setIcon(_type)
+    msg.setWindowTitle(title) 
+    msg.setText(text) 
+    msg.exec()
+
+def showQuery(title, text):
+    return QMessageBox.question(None, title, text, QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+
+def showSelectOptions(title, text, options):
+    choice, ok = QInputDialog.getItem(None, title, text, [str(i) for i in options], 0, False)
+    return ok, choice
+
+def gameTypeDialog() -> Game:
+    options = [
+        "Demon's Souls",
+        "Dark Souls 1",
+        "Dark Souls 2",
+        "Dark Souls 3",
+        "Bloodborne",
+        "Sekiro",
+        "Elden Ring",
+        "Nightreign"
+    ]
+
+    dialog = QDialog(None)
+    dialog.setWindowTitle("Select Game Type")
+    dialog.setModal(True)
+
+    layout = QVBoxLayout(dialog)
+
+    label = QLabel("Choose one of the following:")
+    combo = QComboBox()
+    combo.setStyleSheet("""QComboBox {padding: 3px 0px 3px 6px;}""")
+    combo.addItems(options)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+    )
+
+    layout.addWidget(label)
+    layout.addWidget(combo)
+    layout.addWidget(buttons)
+
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+
+    result = dialog.exec()
+
+    if result == QDialog.Accepted:
+        return Game(combo.currentText())
+
+    return Game(None)
+
+def getOutputPath() -> Path:
+    folder = QFileDialog.getExistingDirectory(
+        None,
+        "Select Output Folder"
+    )
+    return Path(folder) if folder else None

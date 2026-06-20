@@ -22,7 +22,7 @@ from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolut
 from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
-showError, showQuery, showSelectOptions, NaturalListItem)
+showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath)
 
 BLANK_PATH = Path('.')
 
@@ -841,7 +841,9 @@ class TextureStudio(QMainWindow):
 
     def runExtraction(self, tasks=None, mode=ExportMode.SUBTEXTURE, gridOverlay=False):
         """Start the extract process for images."""
-        output_dir = self.project_dir / "Output"
+        output_dir = getOutputPath()
+        if not output_dir:
+            return
 
         if mode == ExportMode.ATLAS:
             ok, filetype = showSelectOptions('File Type', 'Would you like to export in PNG or DDS?', ['png', 'dds'])
@@ -894,7 +896,7 @@ class TextureStudio(QMainWindow):
             _open.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(saved_path))))
             msg.exec()
         else:
-            QMessageBox.critical(self, "Error", f"Failed to find subtextures")
+            QMessageBox.critical(self, "Error", f"Tasks Failed!")
 
     def toggleCustomNames(self):
         """Replaces displaying text for QListWidgetItems with the mapped ones whilst retaining the original in UserRole"""
@@ -1071,6 +1073,10 @@ class TextureStudio(QMainWindow):
         if not self.pending_replacements and not self.pending_additions and not self.pending_new_atlases:
             QMessageBox.information(self, "Info", "No actions queued.")
             return
+        
+        output_dir = getOutputPath()
+        if not output_dir:
+            return
     
         self.replace_dialog = QProgressDialog("Applying changes...", None, 0, 0, self)
         self.replace_dialog.setWindowTitle("Processing")
@@ -1083,7 +1089,7 @@ class TextureStudio(QMainWindow):
 
         self.r_thread = QThread()
         self.r_worker = WriteWorker(self.pending_new_atlases, self.pending_replacements, self.pending_additions, self.LOADED_DCX_FILES, self.LAYOUT_DATA,
-                                      self.getPilImage, self.game, self.RESOLUTIONS)
+                                      self.getPilImage, self.game, self.RESOLUTIONS, output_dir)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
