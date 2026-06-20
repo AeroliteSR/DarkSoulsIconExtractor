@@ -1325,7 +1325,7 @@ class TextureStudio(QMainWindow):
 
         if self.current_crop is not None and self.subtexture_list.currentItem(): # Subtexture selected
             key = self.subtexture_list.currentItem().data(Qt.UserRole)
-            self.runExtraction(tasks=[(self.current_atlas, key)])
+            self.runExtraction(tasks=[(self.current_atlas, self.atlases[self.current_atlas].fetch(key))])
 
         else: # No subtexture selected, export the full atlas   
             img_type = self.atlas_list.currentItem().data(Qt.UserRole+2)
