@@ -96,7 +96,6 @@ class LoadWorker(QObject):
         return textures_dict
 
     def processModern(self):
-        raise ValueError("hewoo")
         atlases: dict[str, Atlas] = {}
         total_files = len(self.file_mappings)
 

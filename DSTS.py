@@ -1394,6 +1394,7 @@ def getIcon(base_path):
 def main():
     app = QApplication(sys.argv)
     base_path = Path(sys.argv[0]).parent
+    app.setStyle("Fusion")
     app.setStyleSheet(Palettes.DARK_STYLESHEET)
     app.setWindowIcon(getIcon(base_path))
     window = TextureStudio(project_dir=base_path)

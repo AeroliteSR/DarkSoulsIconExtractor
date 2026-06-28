@@ -139,6 +139,24 @@ class Palettes():
         border-radius: 6px;
     }
 
+    QMenuBar {
+        background-color: #1E1E1E;
+    }
+
+    QMenuBar::item {
+        background: transparent;
+        color: white;
+        padding: 4px 8px;
+    }
+
+    QMenuBar::item:selected {
+        background-color: #313131;
+    }
+
+    QMenuBar::item:pressed {
+        background-color: #313131;
+    }
+
     QMenu {
         background-color: #0F0F0F;
         color: #FFFFFF;
