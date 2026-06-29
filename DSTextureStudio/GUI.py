@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
-QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog)
+QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
 from PySide6.QtGui import QPalette, QPainter, QAction
 from .GameInfo import Types
@@ -10,6 +10,7 @@ from pathlib import Path
 class NaturalListItem(QListWidgetItem):
     def __init__(self, text):
         super().__init__(text)
+        self.setForeground(Qt.white)
 
     @staticmethod
     def naturalSortKey(text):
@@ -227,7 +228,6 @@ class Palettes():
 
     QListWidget::item:selected {
         background-color: #393939;
-        color: white;
         padding: 0px 10px 0px 10px; /* top right bottom left */
 
         background: qlineargradient(
@@ -309,17 +309,23 @@ class SearchWindow(QWidget):
         self.results.emit(text, self.atlas_search.isChecked())
 
 class TextureNamePrompt(QDialog):
-    def __init__(self, mode: ImageType = ImageType.Subtexture, padprompt=True, halfprompt=True):
+    def __init__(self, mode: ImageType = ImageType.Subtexture, resizeprompt=True, padprompt=True, halfprompt=True):
         super().__init__()
         self.mode = mode
         self.halfprompt = halfprompt
         self.padprompt = padprompt
+        self.resizeprompt = resizeprompt
         self.setWindowTitle("Prompt")
 
-        self.width_label = None
-        self.height_label = None
-        self.width_input = None
-        self.height_input = None
+        self.b_width_label = None
+        self.b_height_label = None
+        self.b_width_input = None
+        self.b_height_input = None
+
+        self.r_width_label = None
+        self.r_height_label = None
+        self.r_width_input = None
+        self.r_height_input = None
 
         self.layout = QVBoxLayout()
 
@@ -347,6 +353,29 @@ class TextureNamePrompt(QDialog):
                 self.half_checkbox = QCheckBox("Half")
                 self.layout.addWidget(self.half_checkbox)
 
+            if self.resizeprompt:
+                self.resize_checkbox = QCheckBox("Resize Image")
+                self.resize_checkbox.toggled.connect(self.resize_toggle_size_fields)
+                self.layout.addWidget(self.resize_checkbox)
+
+                self.resize_container = QWidget()
+                resize_layout = QFormLayout(self.resize_container)
+
+                self.r_width_input = QSpinBox()
+                self.r_width_input.setRange(1, 8192)
+                self.r_width_input.setValue(160)
+
+                self.r_height_input = QSpinBox()
+                self.r_height_input.setRange(1, 8192)
+                self.r_height_input.setValue(160)
+
+                resize_layout.addRow("Width:", self.r_width_input)
+                resize_layout.addRow("Height:", self.r_height_input)
+
+                self.layout.addWidget(self.resize_container)
+
+                self.resize_container.hide()
+
         else:
             self.layout.addWidget(QLabel("Atlas Name:"))
             self.name_input = QLineEdit()
@@ -359,10 +388,26 @@ class TextureNamePrompt(QDialog):
             self.layout.addWidget(self.format_input)
 
             self.blank_checkbox = QCheckBox("Blank Image")
-            self.blank_checkbox.clicked.connect(self.toggle_size_fields)
+            self.blank_checkbox.toggled.connect(self.blank_toggle_size_fields)
             self.layout.addWidget(self.blank_checkbox)
 
-            self.toggle_size_fields(self.blank_checkbox.isChecked())
+            self.blank_container = QWidget()
+            blank_layout = QFormLayout(self.blank_container)
+
+            self.b_width_input = QSpinBox()
+            self.b_width_input.setRange(1, 8192)
+            self.b_width_input.setValue(1024)
+
+            self.b_height_input = QSpinBox()
+            self.b_height_input.setRange(1, 8192)
+            self.b_height_input.setValue(1024)
+
+            blank_layout.addRow("Width:", self.b_width_input)
+            blank_layout.addRow("Height:", self.b_height_input)
+
+            self.layout.addWidget(self.blank_container)
+
+            self.blank_container.hide()
 
         self.form_layout = QVBoxLayout()
         self.layout.addLayout(self.form_layout)
@@ -374,35 +419,12 @@ class TextureNamePrompt(QDialog):
 
         self.submit_button.clicked.connect(self.accept)
 
-    def toggle_size_fields(self, checked):
-        if not checked: # genuinely no idea why it's reversed
-            for widget in [self.width_label, self.height_label,
-                        self.width_input, self.height_input]:
-                if widget:
-                    self.form_layout.removeWidget(widget)
-                    widget.deleteLater()
+    def blank_toggle_size_fields(self, checked):
+        self.blank_container.setVisible(checked)
+        self.adjustSize()
 
-            self.width_label = self.width_input = None
-            self.height_label = self.height_input = None
-
-        else:
-            self.width_label = QLabel("Width:")
-            self.width_input = QSpinBox()
-            self.width_input.setRange(1, 8192)
-            self.width_input.setValue(1024)
-
-            self.height_label = QLabel("Height:")
-            self.height_input = QSpinBox()
-            self.height_input.setRange(1, 8192)
-            self.height_input.setValue(1024)
-
-            self.form_layout.addWidget(self.width_label)
-            self.form_layout.addWidget(self.width_input)
-            self.form_layout.addWidget(self.height_label)
-            self.form_layout.addWidget(self.height_input)
-
-        self.layout.invalidate()
-        self.layout.activate()
+    def resize_toggle_size_fields(self, checked):
+        self.resize_container.setVisible(checked)
         self.adjustSize()
 
     def get_result(self):
@@ -412,17 +434,22 @@ class TextureNamePrompt(QDialog):
             else:
                 half = False
 
+            if self.resizeprompt and self.resize_checkbox.isChecked():
+                resize = (self.r_width_input.value(), self.r_height_input.value())
+            else:
+                resize = None
+
             id = self.id_input.text()
             if not id.isdigit() or not 0 <= int(id) < 65536:
                 showError("Inputted ID is not an asserted UInt16.\nThis may silently throw errors in Smithbox or elsewhere.\nRename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
             
             if self.padprompt:
-                return f"{self.prefix_input.currentText()}_{id}", self.padding_input.value(), half
+                return f"{self.prefix_input.currentText()}_{id}", self.padding_input.value(), resize, half
             else:
-                return f"{self.prefix_input.currentText()}_{id}", half
+                return f"{self.prefix_input.currentText()}_{id}", resize, half
         
         else:
-            coords = (self.width_input.value(), self.height_input.value()) if self.blank_checkbox.isChecked() else None
+            coords = (self.b_width_input.value(), self.b_height_input.value()) if self.blank_checkbox.isChecked() else None
             return self.name_input.text(), self.format_input.currentText(), coords
         
 class DefineSubtexturePrompt(QDialog):

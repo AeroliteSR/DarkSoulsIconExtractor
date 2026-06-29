@@ -343,7 +343,7 @@ class TextureStudio(QMainWindow):
         dcx_file = Path(atlas_item.data(Qt.UserRole+1))
         old_name = sub_item.data(Qt.UserRole)
 
-        dialog = TextureNamePrompt(halfprompt=False, padprompt=False)
+        dialog = TextureNamePrompt(resizeprompt=False, halfprompt=False, padprompt=False)
         if not dialog.exec():
             return
 
@@ -547,7 +547,7 @@ class TextureStudio(QMainWindow):
 
         match mode:
             case IconMode.Append:
-                if not subs and not any(atlas_name == atlas.name for atlas in self.pending_new_atlases[dcx_file]):
+                if not subs and not any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(dcx_file, [])):
                     showError("This atlas isn't mapped, sorry!")
                     return
     
@@ -555,7 +555,7 @@ class TextureStudio(QMainWindow):
                 if not dialog.exec():
                     return
 
-                name, padding, half = dialog.get_result()
+                name, padding, resize, half = dialog.get_result()
 
                 if name in subs:
                     showError("An icon of this name already exists!")
@@ -566,7 +566,13 @@ class TextureStudio(QMainWindow):
                     return
                 
                 img = Image.open(img_path).convert('RGBA')
-                w, h = img.size
+
+                if resize:
+                    w, h = resize
+                    img = img.resize(resize, Image.Resampling.LANCZOS)
+                else:
+                    w, h = img.size
+
                 atlas_img = self.getPilImage(atlas_name)
 
                 used_rects = [st.box(padding=padding) for st in subs]
