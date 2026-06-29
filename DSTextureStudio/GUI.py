@@ -227,6 +227,7 @@ class Palettes():
 
     QListWidget::item:selected {
         background-color: #393939;
+        color: white;
         padding: 0px 10px 0px 10px; /* top right bottom left */
 
         background: qlineargradient(
@@ -681,7 +682,7 @@ class TextureListWidget(QListWidget):
         super().resizeEvent(event)
         self.repositionButton()
 
-    def repositionButton(self, margin=4):
+    def repositionButton(self, margin=10):
         self.add_button.move(self.width() - self.add_button.width() - margin, self.height() - self.add_button.height() - margin)
 
 
