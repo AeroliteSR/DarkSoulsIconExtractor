@@ -492,7 +492,7 @@ class TextureStudio(QMainWindow):
             return
         name, _format, dimensions = dialog.get_result()
 
-        if not hasattr(self, "atlases"):
+        if not hasattr(self, "atlases"): # if no project loaded, aka writing custom tpfs, init these so they dont throw errors elsewhere
             self.atlases = {}
             self.LOADED_DCX_FILES = {}
             self.LAYOUT_DATA = {}
