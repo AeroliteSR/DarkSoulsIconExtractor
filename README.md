@@ -5,7 +5,7 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 |------------|---------|--------|---------|-----|
 | DeS        |   ✅    |  ✅    |   ❌    | ❌  |
 | DS1        |   ✅    |  ✅    |   ✅    | ✅  |
-| DS2        |   ✅    |  ✅    |   ✅    | ⚠️  |
+| DS2        |   ✅    |  ✅    |   ✅    | ✅  |
 | DS3        |   ✅    |  ✅    |   ✅    | ✅  |
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
@@ -13,7 +13,8 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 | NR         |   ✅    |  ✅    |   ✅    | ✅  |  
   
 *DS1 refers to both PTDE and Remastered, and DS2 refers to both the original and SOTFS  
-Note that for DS1 and DS3, icons can only be appended to atlases whose standard dimensions are mapped. Non-uniform ones aren't supported.  
+  
+*Note that for DS1 and DS3, icons can only be appended to atlases whose standard dimensions are mapped. Non-uniform ones aren't supported.  
   
 # Prerequisites (pip install):
 rich  
@@ -79,10 +80,8 @@ existing image.
 You can also add your own custom atlases, though this feature is pretty experimental.
   
 ### Extra note about adding to DS2
-The way Dark Souls 2 works goes completely against the workflow for the other games. As such, despite getting out "workable" functionality for it, 
-the system is very hacky and not at all intuitive. You have to load at least 1 file from DS2 to act as your new texture's "parent" to build from. During the 
-Apply Changes process, all new 'atlas' additions are written at once as standalone .tpf files. It therefore skips any other changes you may have made to the 
-project, such as texture replacements. I may get around to fixing it up one day.  
+To create a custom icon for DS2, don't load any game files and then press the plus button for the atlas list. DSTS will assume you're writing a TPF file with no compression.  
+You probably want BC3_UNORM_SRGB as the format. `Apply Changes` will write plain tpf files to the output location.  
   
 # Credits:
 A myriad thanks to Kmstr and Managarm for their suggestions, feedback and testing throughout development! :))  

@@ -11871,15 +11871,6 @@ class Types():
         "MENU_Ch",
     ]
 
-    DDSFormats = {
-        "BC7_UNORM": 102,
-        "BC1_UNORM": 0,
-        "BC2_UNORM": 3,
-        "BC3_UNORM": 5,
-        "BC4_UNORM": 25,
-        "BC5_UNORM": 104,
-    }
-
     ROOTS = { # maybe in the future if multiple file types use layouts, remove the "\01_Common" hardcode and make it from basename in buildOperations
         "Sekiro": Path(r"N:\NTC\data\Menu\ScaleForm\SBLayout\01_Common"),
 

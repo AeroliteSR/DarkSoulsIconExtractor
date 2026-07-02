@@ -6,6 +6,7 @@ from .GameInfo import Types
 from .Enums import Game, ImageType
 import re
 from pathlib import Path
+from soulstruct.base.textures.dds.enums import DXGI_FORMAT
 
 class NaturalListItem(QListWidgetItem):
     def __init__(self, text):
@@ -194,8 +195,14 @@ class Palettes():
 
     QComboBox {
         background-color: #2D2D2D;
-        color: #FFFFFF;
-        padding: 3px 0px 3px 0px; /* top right bottom left */
+        color: white;
+        padding: 3px 0px 3px 4px;
+        border: 1px solid #555;
+    }
+
+    QSpinBox,
+    QLineEdit {
+        background-color: #3C3C3C;
     }
 
     QMessageBox,
@@ -383,7 +390,7 @@ class TextureNamePrompt(QDialog):
 
             self.layout.addWidget(QLabel("Format:"))
             self.format_input = QComboBox()
-            self.format_input.addItems(Types.DDSFormats.keys())
+            self.format_input.addItems([i.name for i in DXGI_FORMAT])
             self.format_input.setEditable(True)
             self.layout.addWidget(self.format_input)
 

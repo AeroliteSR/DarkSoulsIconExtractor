@@ -169,12 +169,12 @@ class Atlas:
         if sub:
             sub[0].img = image
             
-    def writetpf(self, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
-        """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files."""
+    def writetpf(self, output: Path, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
+        """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files. Output is parent dir."""
         TPF(platform=platform,
             encoding_type=encoding,
             tpf_flags=flags,
-            textures=[self.texture]).write(f"{self.parent.parent/self.name}.tpf")
+            textures=[self.texture]).write((output / self.name).with_suffix(".tpf"))
 
     def __repr__(self) -> str:
         return (

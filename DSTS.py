@@ -473,23 +473,29 @@ class TextureStudio(QMainWindow):
             return
         
         if self.atlas_list.count() == 0:
-            showError('No files loaded!')
-            return
-
-        files = list(self.LOADED_DCX_FILES.keys())
-        if len(files) > 1 and self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
+            answer = showQuery("Creation", "You currently have no loaded files.\nWould you like to create a new TPF, like DS2 uses?")
+            if answer != QMessageBox.Yes:
+                return
+            self.game = Game("Dark Souls 2")
+                
+        if self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
+            files = list(self.LOADED_DCX_FILES.keys())
             ok, parent = showSelectOptions("Select parent file", "Files:", files)
             if not ok:
                 return
+            parent = Path(parent)
         else:
-            parent = files[0]
-        dcx_file = Path(parent)
-
+            parent = "None"
 
         dialog = TextureNamePrompt(mode=ImageType.Texture)
         if not dialog.exec():
             return
         name, _format, dimensions = dialog.get_result()
+
+        if not hasattr(self, "atlases"):
+            self.atlases = {}
+            self.LOADED_DCX_FILES = {}
+            self.LAYOUT_DATA = {}
 
         if dimensions: # blank option was selected and returned tuple
             img_path = createBlankImage(dimensions)
@@ -504,7 +510,7 @@ class TextureStudio(QMainWindow):
             showError("A texture of this name already exists!")
             return
 
-        blank = TPFTexture(stem=name, mipmap_count=1, format=Types.DDSFormats[_format], platform=TPFPlatform.PC)
+        blank = TPFTexture(stem=name, platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
         blank.replace_dds(img_path, dds_format=_format)
         new_atlas = Atlas(
             name=name,
@@ -512,8 +518,8 @@ class TextureStudio(QMainWindow):
             parent=parent
         )
 
-        self.pending_new_atlases.setdefault(dcx_file, [])
-        self.pending_new_atlases[dcx_file].append(new_atlas)
+        self.pending_new_atlases.setdefault(parent, [])
+        self.pending_new_atlases[parent].append(new_atlas)
         self.atlases.setdefault(name, new_atlas)
 
         item = NaturalListItem(name)
@@ -523,7 +529,7 @@ class TextureStudio(QMainWindow):
         item.setData(Qt.UserRole+2, ImageType.Custom) # image type
         self.atlas_list.addItem(item)
 
-        self.rebuildAtlas(name, dcx_file)
+        self.rebuildAtlas(name, parent)
         self.atlas_list.setCurrentItem(item)
         self.showAtlas(self.atlas_list.currentItem())
 
@@ -886,7 +892,8 @@ class TextureStudio(QMainWindow):
 
     def extractionDone(self, success=True, saved_path: Path|None = None):
         """Stuff to do after extraction finishes"""
-        self.progress_dialog.close()
+        if hasattr(self, "progress_dialog"):
+            self.progress_dialog.close()
 
         if saved_path is None:
             saved_path = self.project_dir / "Output"
@@ -1108,7 +1115,8 @@ class TextureStudio(QMainWindow):
 
     def changesDone(self, success: bool, msg: str, saved_path: Path):
         """Triggered on completion of tpf/dcx export."""
-        self.replace_dialog.close()
+        if hasattr(self, "replace_dialog"):
+            self.replace_dialog.close()
         if success:
             self.extractionDone(True, saved_path)
             self.pending_replacements.clear()

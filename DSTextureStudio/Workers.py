@@ -204,7 +204,7 @@ class LoadWorker(QObject):
 
 class ExtractWorker(QObject):
     progress = Signal(int, str) # percent, message
-    finished = Signal(bool) # success
+    finished = Signal(bool, object) # success
 
     def __init__(self, atlases, output_dir: Path, loader, tasks=None, mode=ExportMode.SUBTEXTURE, filetype='png', gridOverlay=False):
         super().__init__()
@@ -234,7 +234,7 @@ class ExtractWorker(QObject):
             match self.mode:
                 case ExportMode.ATLAS:
                     if not self.atlases:
-                        self.finished.emit(False)
+                        self.finished.emit(False, None)
                         return
 
                     for atlas_name in self.atlases:
@@ -242,7 +242,7 @@ class ExtractWorker(QObject):
 
                 case ExportMode.SUBTEXTURE:
                     if not any([a.count>0 for a in self.atlases.values()]):
-                        self.finished.emit(False)
+                        self.finished.emit(False, None)
                         return
 
                     for atlas_name,_atlas in self.atlases.items():
@@ -308,10 +308,15 @@ class WriteWorker(QObject):
         dcx_ops = {}
 
         # new atlases
-        for dcx_path, atlases in self.new_atlases.items():
-            base_name = Path(dcx_path)
-            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
-            dcx_ops[base_name]["new_atlases"].extend(atlases)
+        for parent, atlases in self.new_atlases.items():
+            if parent == "None":
+                for t in atlases:
+                    print(f"Writing standalone TPF for: {t}")
+                    t.writetpf(self.output_dir)
+            else:
+                base_name = Path(parent)
+                dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
+                dcx_ops[base_name]["new_atlases"].extend(atlases)
 
         # replacements
         for dcx_path, atlases in self.replacements.items():
