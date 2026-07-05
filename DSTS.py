@@ -683,24 +683,27 @@ class TextureStudio(QMainWindow):
                         except Exception as e:
                             QMessageBox.critical(self, "Error", f"Failed to load DLL:\n{e}")
 
-    def openDcxDialog(self, dirmode: bool = False):
+    def openDcxDialog(self, file: Path|None = None, dirmode: bool = False):
         """Handles everything to do with loading files. If dirmode = True, loads every dcx/tpf in a directory."""    
         self.clear()
         self.checkOodleDLL()
 
-        if not dirmode:
-            file_path = Path(QFileDialog.getOpenFileName(self, "Select File", "", "Texture Files (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
-            if not file_path or file_path == BLANK_PATH:
-                return
-            files = [file_path] if file_path else []
+        if file:
+            files = [file]
         else:
-            dir_path = Path(QFileDialog.getExistingDirectory(self, "Select Folder"))
-            if not dir_path or dir_path == BLANK_PATH:
-                return
-            files = [f for pattern in ["*.tpf.dcx", "*.tpf", "*sblytbnd.dcx"] for f in dir_path.glob(pattern)]
+            if not dirmode:
+                file_path = Path(QFileDialog.getOpenFileName(self, "Select File", "", "Texture Files (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
+                if not file_path or file_path == BLANK_PATH:
+                    return
+                files = [file_path] if file_path else []
+            else:
+                dir_path = Path(QFileDialog.getExistingDirectory(self, "Select Folder"))
+                if not dir_path or dir_path == BLANK_PATH:
+                    return
+                files = [f for pattern in ["*.tpf.dcx", "*.tpf", "*sblytbnd.dcx"] for f in dir_path.glob(pattern)]
 
-        if not files:
-            return
+            if not files:
+                return
 
         str_path = str(files[0].parent if dirmode else files[0])
         self.setWindowTitle(f"DSTS - {str_path}")
@@ -1413,6 +1416,11 @@ def main():
     app.setWindowIcon(getIcon(base_path))
     window = TextureStudio(project_dir=base_path)
     window.show()
+
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+        print("Auto Opening: ", filename)
+        window.openDcxDialog(file=Path(filename))
     sys.exit(app.exec())
 
 if __name__ == "__main__":
