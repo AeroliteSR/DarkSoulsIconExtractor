@@ -50,7 +50,6 @@ def setuplog(signal=None):
 
     if signal is not None: # window
         qt = QtLogHandler(signal)
-        qt.setLevel(logging.INFO)
         qt.setFormatter(formatter)
         logger.addHandler(qt)
 
