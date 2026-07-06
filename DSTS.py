@@ -10,23 +10,26 @@ from math import gcd
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
 from PySide6.QtGui import QIcon, QDesktopServices, QAction
-from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize
+from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 # Soulstruct
 from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP
 # DSTS
-from DSTextureStudio.GameInfo import Maps, Types
+from DSTextureStudio.GameInfo import Maps
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath)
+from DSTextureStudio.log_utils import setuplog, ConsoleWindow
 
 BLANK_PATH = Path('.')
 
 class TextureStudio(QMainWindow):
+    logSignal = Signal(str)
+
     def __init__(self, project_dir):
         super().__init__()
         self.project_dir = project_dir
@@ -34,10 +37,12 @@ class TextureStudio(QMainWindow):
 
         self.setWindowTitle("DSTS")
         self.setGeometry(100, 100, 1100, 700)
-        self.createMenu()
 
         self._context_menu = QMenu(self)
 
+        self.atlases = []
+        self.LOADED_DCX_FILES = []
+        self.LAYOUT_DATA = []
         self.current_crop = None
         self.current_atlas = None
         self.thumbnail_cache = {}
@@ -46,6 +51,22 @@ class TextureStudio(QMainWindow):
         self.pending_new_atlases = {}
         self.RESOLUTIONS = {}
         self.game = Game(None)
+
+        self.console = ConsoleWindow(self)
+        self.console.set_objects(
+            instance=lambda: self,
+            atlases=lambda: self.atlases,
+            current=lambda: self.current_atlas,
+            crop=lambda: self.current_crop,
+            cache=lambda: self.thumbnail_cache,
+            replacements=lambda: self.pending_replacements,
+            additions=lambda: self.pending_additions,
+            new=lambda: self.pending_new_atlases,
+            changes=lambda: {"replacements":self.pending_replacements, "additions":self.pending_additions, "custom":self.pending_new_atlases},
+            loaded=lambda: self.LOADED_DCX_FILES,
+            layouts=lambda: self.LAYOUT_DATA
+        )
+        self.createMenu()
 
         container = QWidget()
         layout = QHBoxLayout(container)
@@ -203,6 +224,8 @@ class TextureStudio(QMainWindow):
                                                                                          " File->Apply Changes to save. This may take a while.")))
         self.help_menu.addAction(createAction("About", lambda: QMessageBox.information(self, "About", 
                                                                                        "Made by <a href='https://linktr.ee/aerolitesr'>Aero</a> :><br><br>")))
+        self.help_menu.addSeparator()
+        self.help_menu.addAction(createAction("Console", self.console.show))
 
     def openSubtextureMenu(self, position: QPoint):
         sender = self.sender()
@@ -439,7 +462,6 @@ class TextureStudio(QMainWindow):
             item.name = new_name
             for sub in item.subtextures:
                 if sub.parent is not None:
-                    print(sub.parent, new_name)
                     sub.parent = new_name
             self.atlases[new_name] = item
 
@@ -656,7 +678,7 @@ class TextureStudio(QMainWindow):
             try:
                 dll = oodle.LOAD_DLL() # no args, checks default paths
                 shutil.copy(dll, target)
-                print("DEBUG:: oodle dll found in default paths and copied to DSTS")
+                logger.info("oo2core dll was found in default paths and has been copied to DSTS. No action required.")
                 
             except oodle.MissingOodleDLLError:
 
@@ -848,6 +870,7 @@ class TextureStudio(QMainWindow):
             item.setSizeHint(QSize(0, 30))
             item.setData(Qt.UserRole+2, self.atlases.get(name, {}).itype) # image type
             self.atlas_list.addItem(item)
+        logger.info("Finished populating atlas list")
 
         self.atlas_list.sortItems()
         self.toggleCustomNames() # simply update it just in case setting was on before load
@@ -1417,9 +1440,12 @@ def main():
     window = TextureStudio(project_dir=base_path)
     window.show()
 
+    global logger
+    logger = setuplog(signal=window.logSignal)
+    logger.info("Application Started.")
     if len(sys.argv) > 1:
         filename = sys.argv[1]
-        print("Auto Opening: ", filename)
+        logger.info("Autorunning file passed as argument: %s", filename)
         window.openDcxDialog(file=Path(filename))
     sys.exit(app.exec())
 

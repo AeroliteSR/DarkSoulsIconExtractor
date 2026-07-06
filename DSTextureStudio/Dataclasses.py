@@ -1,14 +1,17 @@
+import logging
 from dataclasses import dataclass, field
 from textwrap import indent
-from typing import Optional
+from typing import Optional, Callable
 from PIL import Image
 from pathlib import Path
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
-from .Helpers import replaceTerms
-from .Enums import ImageType
+from DSTextureStudio.Helpers import replaceTerms
+from DSTextureStudio.Enums import ImageType
 import xml.etree.ElementTree as ET
+
+logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class AtlasLayout:
@@ -86,7 +89,7 @@ class AtlasLayout:
                 name = f"{name}.png"
 
             if self.has_subtexture(name):
-                print(f"Subtexture entry `{name}` already exists in layout file. Skipping.")
+                logger.info("Subtexture entry `%s` already exists in layout file. Skipping.", name)
                 continue
 
             item = ET.SubElement(atlas, "SubTexture", {
@@ -97,7 +100,7 @@ class AtlasLayout:
                 "height": str(sub.height),
                 "half": str(int(sub.half))})
             
-            print(f"Adding Subtexture to {sub.parent}:\n{ET.tostring(item, encoding='unicode')}")
+            logger.info("Adding Subtexture to %s:\n%s", sub.parent, ET.tostring(item, encoding='unicode'))
             
             if len(atlas) == 1:
                 atlas.text = '\r\n\t'
@@ -183,7 +186,7 @@ class Atlas:
             f"    parent = {self.parent}\n"
             f"    subtexture count = {self.count}\n"
             f"    texture = \n{indent(self.texture.__repr__(), "        ")}\n"
-            f"    subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
+           # f"    subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
         )
 
@@ -230,3 +233,9 @@ class SubTexture:
             f"    half = {self.half}\n"
             f")"
         )
+    
+@dataclass
+class Command:
+    func: Callable
+    help: str
+

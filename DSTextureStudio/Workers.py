@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 # Basic Modules
 import os
 import numpy as np
@@ -19,7 +20,9 @@ from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, ResFormat, Resolution, Game, GameType
 from DSTextureStudio.Helpers import replaceTerms, createDebugGrid, getLayoutData
 from DSTextureStudio.GUI import getOutputPath
-from DSTextureStudio.trace import format_exc_clean
+from DSTextureStudio.log_utils import format_exc_clean
+
+logger = logging.getLogger(__name__)
 
 class LoadWorker(QObject):
     progress = Signal(int, str)   # percent, message
@@ -36,10 +39,13 @@ class LoadWorker(QObject):
         try:
             match self.game.type:
                 case GameType.MODERN:
+                    logger.info("Beginning unpack for game type: Modern")
                     self.processModern()
                 case GameType.OLD | GameType.PS:
+                    logger.info("Beginning unpack for game type: Legacy")
                     self.processOld()
                 case _:
+                    logger.info("Beginning unpack with unknown game type, defaulting to Legacy")
                     self.processOld()
         except:
             self.finished.emit({}, {}, {}, format_exc_clean())
@@ -58,6 +64,7 @@ class LoadWorker(QObject):
 
         for texture in tpfdcx.textures:
             if self.game.type == GameType.PS:
+                logger.info("PS format detected. Creating headerized dds for TPFTexture: %s", texture.stem)
                 match self.game.name:
                     case "Bloodborne":
                         platform = TPFPlatform.PS4
@@ -89,9 +96,11 @@ class LoadWorker(QObject):
             paths = [Path(dcx_path)]
 
         for path in paths:
+            logger.info("Getting texture data for file: %s", path)
             for texture in self.handleUnpack(path):
                 textures_dict[texture.stem] = texture
 
+        logger.info("Generated texture dictionary with %i entries", len(textures_dict))
         self.progress.emit(percent, f"Loaded {dcx_path.stem}")
         return textures_dict
 
@@ -112,36 +121,42 @@ class LoadWorker(QObject):
 
                 atlas_nodes = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
                 self.LAYOUT_DATA[file['file']] = atlas_nodes
-                total_atlases = len(atlas_nodes)
 
-                if total_atlases == 0:
-                    self.progress.emit(100, "No atlases found")
-                    self.finished.emit({}, {}, {})
-                    return
 
-                for texture_atlas in atlas_nodes:
-                    filepath = texture_atlas.imagePath
-                    filename = Path(filepath).stem
+                layout_lookup = {
+                    Path(atlas.imagePath).stem: atlas
+                    for atlas in atlas_nodes
+                }
 
-                    if filename not in textures_dict:
-                        self.progress.emit(int(f_idx / total_files * 100), f"{filename} not found, skipping.")
-                        continue
+                logger.info("Successfully loaded %i atlas nodes.", len(atlas_nodes))
 
-                    subtextures = [SubTexture(name=Path(sub.get("name")).stem,
-                                                parent=filename,
-                                                x=int(sub.get("x")),
-                                                y=int(sub.get("y")),
-                                                width=int(sub.get("width")),
-                                                height=int(sub.get("height")),
-                                                blank=False,
-                                                vanilla=True,
-                                        ) for sub in texture_atlas.iter_subtextures()]
+                for filename, texture in textures_dict.items():
+                    texture_atlas = layout_lookup.get(filename)
 
-                    atlases[filename] = Atlas(name=filename,
-                                                texture=textures_dict[filename],
-                                                parent=file['file'],
-                                                subtextures=subtextures
-                                            )
+                    if texture_atlas is None:
+                        logger.warning("Creating Atlas object with no SubTextures for Texture with no Layout: '%s'", filename)
+                        subtextures = []
+                    else:
+                        subtextures = [
+                            SubTexture(
+                                name=Path(sub.get("name")).stem,
+                                parent=filename,
+                                x=int(sub.get("x")),
+                                y=int(sub.get("y")),
+                                width=int(sub.get("width")),
+                                height=int(sub.get("height")),
+                                blank=False,
+                                vanilla=True,
+                            )
+                            for sub in texture_atlas.iter_subtextures()
+                        ]
+
+                    atlases[filename] = Atlas(
+                        name=filename,
+                        texture=texture,
+                        parent=file['file'],
+                        subtextures=subtextures,
+                    )
 
             elif isinstance(file, Path):
                 textures_dict: dict = self.generateTextDict(file, percent)
@@ -149,7 +164,9 @@ class LoadWorker(QObject):
                 for name, texture in textures_dict.items():
                     if name not in atlases:
                         atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
+                logger.info("Successfully loaded %i atlases with no layouts.", len(atlases))
 
+        logger.info("Load Worker process completed succesfully!")
         self.finished.emit(atlases, self.LOADED_DCX_FILES, self.LAYOUT_DATA, "")
         self.progress.emit(100, 'Successfully loaded all files!')
 
@@ -200,6 +217,7 @@ class LoadWorker(QObject):
         
                     self.progress.emit(percent, f"Processed {name}")
 
+        logger.info("Load Worker process completed succesfully with %i atlaes loaded!", len(atlases))
         self.finished.emit(atlases, self.LOADED_DCX_FILES, {}, "")
 
 class ExtractWorker(QObject):
@@ -230,6 +248,7 @@ class ExtractWorker(QObject):
         self.progress.emit(progress, message)
 
     def run(self):
+        logger.info("Initialized image export.")
         if not self.tasks: # dump mode
             match self.mode:
                 case ExportMode.ATLAS:
@@ -303,7 +322,7 @@ class WriteWorker(QObject):
         self.output_dir = output
 
     def buildOperations(self):
-        print("Building operations map...")
+        logger.info("Building operations map...")
 
         dcx_ops = {}
 
@@ -311,7 +330,7 @@ class WriteWorker(QObject):
         for parent, atlases in self.new_atlases.items():
             if parent == "None":
                 for t in atlases:
-                    print(f"Writing standalone TPF for: {t}")
+                    logger.info("Writing standalone TPF for:\n%r", t)
                     t.writetpf(self.output_dir)
             else:
                 base_name = Path(parent)
@@ -352,7 +371,7 @@ class WriteWorker(QObject):
             if dcx_name not in self.LAYOUT_FILES:
                 continue
 
-            print(f"Processing layout for: {base_name}")
+            logger.info("Processing layout for: %s", base_name)
 
             layout_objs = list(self.LAYOUT_FILES[dcx_name])
 
@@ -376,11 +395,11 @@ class WriteWorker(QObject):
                 existing_layout = layout_map.get(atlas_name)
 
                 if existing_layout:
-                    print(f"Adding {len(additions)} subtexture(s) to existing layout '{atlas_name}'")
+                    logger.info("Adding %i subtexture(s) to existing layout '%s'", len(additions), atlas_name)
                     existing_layout.add_subtextures(additions)
 
                 else:
-                    print(f"Creating layout entry for '{atlas_name}' with {len(additions)} subtexture(s)")
+                    logger.info("Creating layout entry for '%s' with %i subtexture(s)", atlas_name, len(additions))
 
                     imgpath = (rf"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{game_format_mode}\{atlas_name}.tif"
                             if self.game.name == "Nightreign"
@@ -394,28 +413,30 @@ class WriteWorker(QObject):
                     layout_objs.append(new_layout)
                     layout_map[atlas_name] = new_layout
 
+            file = base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
             AtlasLayout.build(
                 layout_objs=layout_objs,
                 root=root,
-                output=self.output_dir / base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
+                output=self.output_dir / file
             )
+            logger.info("Successfully wrote file: %s", file)
 
-        print("\nFinished building operations.")
-        print("Summary of DCX operations:")
+        logger.info("Finished building operations.")
+        logger.info("Summary of DCX operations:")
 
         for dcx_name, data in dcx_ops.items():
-            print(f"File: {dcx_name}")
+            logger.info("File: %s", dcx_name)
 
             if data["new_atlases"]:
-                print(f"  New Atlases: {[t.name for t in data['new_atlases']]}")
+                logger.info("  New Atlases: %s", [t.name for t in data['new_atlases']])
 
             for atlas_name, ops in data["atlases"].items():
                 rep_keys = list(ops["replacements"].keys())
                 add_names = [sub.name for sub in ops["additions"]]
 
-                print(f"  Atlas: {atlas_name} | "
-                      f"Replacements: {rep_keys} | "
-                      f"Additions: {add_names}")
+                logger.info(
+                    "  Atlas: %s | Replacements: %s | Additions: %s",
+                    atlas_name, rep_keys, add_names)
 
         return dcx_ops
 
@@ -465,6 +486,7 @@ class WriteWorker(QObject):
                             os.remove(temp_path)
 
                 base.write(self.output_dir / base_path.name)
+                logger.info("Successfully wrote file: %s", base_path)
 
             self.finished.emit(True, "All changes applied successfully!", self.output_dir)
 

@@ -2,8 +2,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
 from PySide6.QtGui import QPalette, QPainter, QAction
-from .GameInfo import Types
-from .Enums import Game, ImageType
+from DSTextureStudio.GameInfo import Types
+from DSTextureStudio.Enums import Game, ImageType
 import re
 from pathlib import Path
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT

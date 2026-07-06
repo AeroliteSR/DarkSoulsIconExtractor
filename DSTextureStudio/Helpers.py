@@ -3,8 +3,8 @@ import numpy as np
 from io import BytesIO
 from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
-from .Enums import Game
-from .GUI import gameTypeDialog
+from DSTextureStudio.Enums import Game
+from DSTextureStudio.GUI import gameTypeDialog
 from soulstruct.dcx import core
 import tempfile
 
