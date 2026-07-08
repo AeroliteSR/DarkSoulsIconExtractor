@@ -172,12 +172,14 @@ class Atlas:
         if sub:
             sub[0].img = image
             
-    def writetpf(self, output: Path, encoding: int = 2, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
+    def writetpf(self, output: Path, dcx_type: DCXType = DCXType.Null, encoding: int = 1, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
         """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files. Output is parent dir."""
         TPF(platform=platform,
             encoding_type=encoding,
             tpf_flags=flags,
-            textures=[self.texture]).write((output / self.name).with_suffix(".tpf"))
+            textures=[self.texture],
+            dcx_type=dcx_type).write((output / self.name).with_suffix(".tpf"))
+        logger.info("Wrote standalone file with compression '%s':\n%s", dcx_type.name, output/self.name)
 
     def __repr__(self) -> str:
         return (

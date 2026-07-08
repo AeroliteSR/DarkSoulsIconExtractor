@@ -88,21 +88,6 @@ class DXGI_FORMAT(IntEnum):
 
     https://learn.microsoft.com/en-us/windows/win32/api/dxgiformat/ne-dxgiformat-dxgi_format
     """
-    BC7_UNORM_SRGB = 99
-    BC1_UNORM_SRGB = 72
-    BC3_UNORM_SRGB = 78
-
-    BC7_UNORM = 98
-    BC1_UNORM = 71
-    BC3_UNORM = 77
-
-    BC2_UNORM_SRGB = 75
-    BC2_UNORM = 74
-    
-    BC4_UNORM = 80
-    BC5_UNORM = 83
-    # ^^ placed at the top for DSTS, as they are the most common
-
     UNKNOWN = 0
     R32G32B32A32_TYPELESS = 1
     R32G32B32A32_FLOAT = 2
@@ -174,19 +159,19 @@ class DXGI_FORMAT(IntEnum):
     R8G8_B8G8_UNORM = 68
     G8R8_G8B8_UNORM = 69
     BC1_TYPELESS = 70
-    #BC1_UNORM = 71
-    #BC1_UNORM_SRGB = 72
+    BC1_UNORM = 71
+    BC1_UNORM_SRGB = 72
     BC2_TYPELESS = 73
-    #BC2_UNORM = 74
-    #BC2_UNORM_SRGB = 75
+    BC2_UNORM = 74
+    BC2_UNORM_SRGB = 75
     BC3_TYPELESS = 76
-    #BC3_UNORM = 77
-    #BC3_UNORM_SRGB = 78
+    BC3_UNORM = 77
+    BC3_UNORM_SRGB = 78
     BC4_TYPELESS = 79
-    #BC4_UNORM = 80
+    BC4_UNORM = 80
     BC4_SNORM = 81
     BC5_TYPELESS = 82
-    #BC5_UNORM = 83
+    BC5_UNORM = 83
     BC5_SNORM = 84
     B5G6R5_UNORM = 85
     B5G5R5A1_UNORM = 86
@@ -201,8 +186,8 @@ class DXGI_FORMAT(IntEnum):
     BC6H_UF16 = 95
     BC6H_SF16 = 96
     BC7_TYPELESS = 97
-    #BC7_UNORM = 98
-    #BC7_UNORM_SRGB = 99
+    BC7_UNORM = 98
+    BC7_UNORM_SRGB = 99
     AYUV = 100
     Y410 = 101
     Y416 = 102

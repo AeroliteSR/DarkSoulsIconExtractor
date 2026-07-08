@@ -9,6 +9,7 @@ from tempfile import NamedTemporaryFile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
+import threading
 # GUI
 from PySide6.QtCore import QObject, Signal
 # Soulstruct
@@ -307,10 +308,14 @@ class ExtractWorker(QObject):
         self.finished.emit(True, self.output_dir)
 
 class WriteWorker(QObject):
+    requestCompression = Signal(str)
     finished = Signal(bool, str, Path)  # success, message
 
     def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, resolutions, output):
         super().__init__()
+        self._event = threading.Event()
+        self._result = None
+
         self.new_atlases = new_atlases
         self.replacements = replacements
         self.additions = additions
@@ -321,6 +326,12 @@ class WriteWorker(QObject):
         self.RESOLUTIONS = resolutions
         self.output_dir = output
 
+    def promptCompression(self, name):
+        self._event.clear()
+        self.requestCompression.emit(name)
+        self._event.wait()
+        return self._result
+
     def buildOperations(self):
         logger.info("Building operations map...")
 
@@ -329,9 +340,16 @@ class WriteWorker(QObject):
         # new atlases
         for parent, atlases in self.new_atlases.items():
             if parent == "None":
+                dcx_type = core.DCXType["Null"]
+                is_reuse = False
                 for t in atlases:
-                    logger.info("Writing standalone TPF for:\n%r", t)
-                    t.writetpf(self.output_dir)
+                    if not is_reuse:
+                        _type, enc, reuse = self.promptCompression(t.name)
+                        dcx_type = core.DCXType[_type]
+                        is_reuse = reuse
+                            
+                    t.writetpf(self.output_dir, dcx_type=dcx_type, encoding=enc)
+
             else:
                 base_name = Path(parent)
                 dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
@@ -446,12 +464,7 @@ class WriteWorker(QObject):
                 base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
 
                 if data["new_atlases"]:
-                    if self.game.name == "Dark Souls 2":
-                        for t in data['new_atlases']:
-                            t.writetpf()
-                        continue # hacky but whatever i cba
-                    else:
-                        base.textures.extend([t.texture for t in data["new_atlases"]])
+                    base.textures.extend([t.texture for t in data["new_atlases"]])
 
                 atlas_cache = {}
 

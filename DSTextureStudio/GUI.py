@@ -6,7 +6,7 @@ from DSTextureStudio.GameInfo import Types
 from DSTextureStudio.Enums import Game, ImageType
 import re
 from pathlib import Path
-from soulstruct.base.textures.dds.enums import DXGI_FORMAT
+from soulstruct.dcx.core import DCXType
 
 class NaturalListItem(QListWidgetItem):
     def __init__(self, text):
@@ -390,8 +390,7 @@ class TextureNamePrompt(QDialog):
 
             self.layout.addWidget(QLabel("Format:"))
             self.format_input = QComboBox()
-            self.format_input.addItems([i.name for i in DXGI_FORMAT])
-            self.format_input.setEditable(True)
+            self.format_input.addItems([i.name for i in Types.DXGI_STRUCT_MAP.keys()])
             self.layout.addWidget(self.format_input)
 
             self.blank_checkbox = QCheckBox("Blank Image")
@@ -532,6 +531,46 @@ class DefineSubtexturePrompt(QDialog):
         hwcoords = (self.width_input.value(), self.height_input.value())
         xycoords = (self.x_input.value(), self.y_input.value())
         return f"{self.prefix_input.currentText()}_{id}", hwcoords, xycoords, half
+
+class CompressionPrompt(QDialog):
+    def __init__(self, name):
+        super().__init__()
+        self.setWindowTitle("Prompt")
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+
+        self.layout = QVBoxLayout()
+
+        self.compression_label = QLabel(f"Select compression for {name}:")
+        self.compression_label.setToolTip("Set to Null to write uncompressed TPF")
+        self.layout.addWidget(self.compression_label)
+        self.format_input = QComboBox()
+        self.format_input.addItems([i.name for i in DCXType if i.name != "Unknown"])
+        self.layout.addWidget(self.format_input)
+
+        self.encoding_input = QSpinBox()
+        self.encoding_input.setRange(0, 2)
+        self.encoding_input.setValue(1)
+        self.encoding_input.setToolTip("0/2 = shift_jis_2004; 1 = UTF-16")
+
+        enc_layout = QHBoxLayout()
+        enc_layout.addWidget(QLabel("Encoding Type:"))
+        enc_layout.addWidget(self.encoding_input)
+
+        self.layout.addLayout(enc_layout)
+
+        self.reuse_checkbox = QCheckBox("Use for all exports")
+        self.layout.addWidget(self.reuse_checkbox)
+
+        self.submit_button = QPushButton("Submit")
+        self.layout.addWidget(self.submit_button)
+
+        self.setLayout(self.layout)
+
+        self.submit_button.clicked.connect(self.accept)
+
+    def get_result(self):
+        return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
+   
 
 class ImageLabel(QLabel):
     def __init__(self, text, parent=None):

@@ -7,21 +7,38 @@ import traceback
 import shlex
 from pprint import pformat
 from DSTextureStudio.Dataclasses import Command
-import re
+import re, sys
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT_STR = str(PROJECT_ROOT).replace("\\", "/")
+
+def clean_traceback(text: str) -> str:
+    text = text.replace("\\", "/")
+    return re.sub(re.escape(PROJECT_ROOT_STR), "<root>", text, flags=re.IGNORECASE)
 
 def format_exc_clean():
-    tb = traceback.format_exc().replace("\\", '/')
-    project = str(PROJECT_ROOT).replace("\\", '/')
+    return clean_traceback("".join(traceback.format_exception(*sys.exc_info())))
 
-    return re.sub(project, '<DSTS>', tb, flags=re.IGNORECASE)
+class CleanFormatter(logging.Formatter):
+    def formatException(self, exc_info):
+        tb = "".join(traceback.format_exception(*exc_info))
+        return clean_traceback(tb)
+    
+formatter = CleanFormatter("%(name)s: %(message)s")
+file_formatter = CleanFormatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
 
 class LogEmitter(QObject):
-    message = Signal(logging.LogRecord)
-
+    message = Signal(object)
 log_emitter = LogEmitter()
 
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.critical(
+        "Uncaught exception",
+        exc_info=(exc_type, exc_value, exc_traceback))
 
 class QtLogHandler(logging.Handler):
     def __init__(self, signal):
@@ -31,30 +48,27 @@ class QtLogHandler(logging.Handler):
     def emit(self, record):
         log_emitter.message.emit(record)
 
-
-def setuplog(signal=None):
+def setuplog():
     logger = logging.getLogger()
 
     if logger.handlers:
         return logger
 
     logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
-
+    
     # log file
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     file = RotatingFileHandler(log_dir/"DSTS.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
-    file.setFormatter(formatter)
+    file.setFormatter(file_formatter)
     logger.addHandler(file)
-
-    if signal is not None: # window
-        qt = QtLogHandler(signal)
-        qt.setFormatter(formatter)
-        logger.addHandler(qt)
 
     return logger
 
+def addQtHandler(logger, signal):
+    handler = QtLogHandler(signal)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 class ConsoleWindow(QWidget):
     def __init__(self, parent=None):
@@ -166,7 +180,7 @@ class ConsoleWindow(QWidget):
         if record.levelno < self.level:
             return
 
-        self.println(f"{record.levelname}: {record.getMessage()}")
+        self.println(f"{record.levelname}: {formatter.format(record)}")
 
     def execute_command(self):
         text = self.command.text().strip()
@@ -200,34 +214,28 @@ class ConsoleWindow(QWidget):
         self.println(f"Unknown command '{text}'")
 
     def execute_python(self, text):
-        def developer_namespace():
-            ns = {}
+        namespace = {
+            name: obj() if callable(obj) else obj
+            for name, obj in self.objects.items()
+        }
 
-            for name, obj in self.objects.items():
-                ns[name] = obj() if callable(obj) else obj
-
-            return ns
-        
-        namespace = developer_namespace()
         globals = {
             "__builtins__": __builtins__,
             "print": self.console_print,
         }
 
         try:
-            result = eval(text, globals, namespace)
-        except SyntaxError:
             try:
+                result = eval(text, globals, namespace)
+            except SyntaxError:
                 exec(text, globals, namespace)
                 return
-            except:
-                raise Exception
+
+            if result is not None:
+                self.println(pformat(result))
+
         except Exception:
             self.println(format_exc_clean())
-            return
-
-        if result is not None:
-            self.println(pformat(result))
 
     def cmd_help(self, arg=None):
         self.println("Available commands:")

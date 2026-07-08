@@ -14,16 +14,16 @@ from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 # Soulstruct
 from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
-from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP
+from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
-from DSTextureStudio.GameInfo import Maps
+from DSTextureStudio.GameInfo import Maps, Types
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
-showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath)
-from DSTextureStudio.log_utils import setuplog, ConsoleWindow
+showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
+from DSTextureStudio.log_utils import setuplog, ConsoleWindow, addQtHandler, handle_exception
 
 BLANK_PATH = Path('.')
 
@@ -40,9 +40,9 @@ class TextureStudio(QMainWindow):
 
         self._context_menu = QMenu(self)
 
-        self.atlases = []
-        self.LOADED_DCX_FILES = []
-        self.LAYOUT_DATA = []
+        self.atlases = {}
+        self.LOADED_DCX_FILES = {}
+        self.LAYOUT_DATA = {}        
         self.current_crop = None
         self.current_atlas = None
         self.thumbnail_cache = {}
@@ -495,9 +495,10 @@ class TextureStudio(QMainWindow):
             return
         
         if self.atlas_list.count() == 0:
-            answer = showQuery("Creation", "You currently have no loaded files.\nWould you like to create a new TPF, like DS2 uses?")
+            answer = showQuery("Creation", "You currently have no loaded files.\nWould you like to create a custom TPF?")
             if answer != QMessageBox.Yes:
                 return
+            self.checkOodleDLL()
             self.game = Game("Dark Souls 2")
                 
         if self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
@@ -532,7 +533,7 @@ class TextureStudio(QMainWindow):
             showError("A texture of this name already exists!")
             return
 
-        blank = TPFTexture(stem=name, platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
+        blank = TPFTexture(stem=name, format=Types.DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
         blank.replace_dds(img_path, dds_format=_format)
         new_atlas = Atlas(
             name=name,
@@ -1132,12 +1133,19 @@ class TextureStudio(QMainWindow):
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
+        self.r_worker.requestCompression.connect(self.showCompressionDialog)
         self.r_worker.finished.connect(self.r_thread.quit)
         self.r_worker.finished.connect(self.changesDone)
         self.r_worker.finished.connect(self.r_worker.deleteLater)
         self.r_thread.finished.connect(self.r_thread.deleteLater)
         
         self.r_thread.start()
+
+    def showCompressionDialog(self, name):
+        dialog = CompressionPrompt(name)
+        dialog.exec()
+        self.r_worker._result = dialog.get_result()
+        self.r_worker._event.set()
 
     def changesDone(self, success: bool, msg: str, saved_path: Path):
         """Triggered on completion of tpf/dcx export."""
@@ -1440,9 +1448,8 @@ def main():
     window = TextureStudio(project_dir=base_path)
     window.show()
 
-    global logger
-    logger = setuplog(signal=window.logSignal)
     logger.info("Application Started.")
+    addQtHandler(logger, window.logSignal)
     if len(sys.argv) > 1:
         filename = sys.argv[1]
         logger.info("Autorunning file passed as argument: %s", filename)
@@ -1450,6 +1457,9 @@ def main():
     sys.exit(app.exec())
 
 if __name__ == "__main__":
+    sys.excepthook = handle_exception
+    global logger
+    logger = setuplog()
     main()
 
 # nuitka --standalone --onefile --windows-console-mode=disable --enable-plugin=pyside6 --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=soulstruct\base\textures\texconv.exe=soulstruct\base\textures\texconv.exe --include-module=constrata --include-module=soulstruct --msvc=latest --lto=yes DSTS.py

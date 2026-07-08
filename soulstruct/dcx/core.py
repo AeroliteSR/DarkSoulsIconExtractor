@@ -66,6 +66,7 @@ class DCXVersionInfo(tp.NamedTuple):
 class DCXType(Enum):
     Unknown = -1  # could not be detected
     Null = 0  # no compression
+    DCX_KRAK = 10  # DCX header, Oodle compression. Used in Sekiro and Elden Ring. <- moved here in DSTS as it's the most common and should be near the top
     Zlib = 1  # not really DCX but supported
     DCP_EDGE = 2  # DCP header, chunked deflate compression. Used in ACE:R TPFs.
     DCP_DFLT = 3  # DCP header, deflate compression. Used in DeS test maps.
@@ -75,7 +76,6 @@ class DCXType(Enum):
     DCX_DFLT_11000_44_8 = 7  # DCX header, deflate compression. Used for the backup regulation in DS3 save files.
     DCX_DFLT_11000_44_9 = 8  # DCX header, deflate compression. Used in Sekiro.
     DCX_DFLT_11000_44_9_15 = 9  # DCX header, deflate compression. Used in old ER regulation.
-    DCX_KRAK = 10  # DCX header, Oodle compression. Used in Sekiro and Elden Ring.
     DCX_ZSTD = 11  # ZSTD compression. Used in new ER regulation.
 
     # Game default aliases.
