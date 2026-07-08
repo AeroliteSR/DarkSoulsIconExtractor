@@ -351,24 +351,22 @@ class WriteWorker(QObject):
                     t.writetpf(self.output_dir, dcx_type=dcx_type, encoding=enc)
 
             else:
-                base_name = Path(parent)
-                dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
-                dcx_ops[base_name]["new_atlases"].extend(atlases)
+                dcx_ops.setdefault(parent, {"new_atlases": [], "atlases": {}})
+                dcx_ops[parent]["new_atlases"].extend(atlases)
 
         # replacements
         for dcx_path, atlases in self.replacements.items():
             base_name = Path(dcx_path)
-            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
+            dcx_ops.setdefault(dcx_path, {"new_atlases": [], "atlases": {}})
 
             for atlas_name, changes in atlases.items():
-                dcx_ops[base_name]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[base_name]["atlases"][atlas_name]["replacements"].update(changes)
+                dcx_ops[dcx_path]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
+                dcx_ops[dcx_path]["atlases"][atlas_name]["replacements"].update(changes)
 
         # Additions
         for dcx_path, add_data in self.additions.items():
-            base_name = Path(dcx_path)
 
-            dcx_ops.setdefault(base_name, {"new_atlases": [], "atlases": {}})
+            dcx_ops.setdefault(dcx_path, {"new_atlases": [], "atlases": {}})
 
             additions_by_atlas = {}
 
@@ -379,26 +377,25 @@ class WriteWorker(QObject):
                 additions_by_atlas.setdefault(sub.parent, []).append(sub)
 
             for atlas_name, subs in additions_by_atlas.items():
-                dcx_ops[base_name]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[base_name]["atlases"][atlas_name]["additions"].extend(subs)
+                dcx_ops[dcx_path]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
+                dcx_ops[dcx_path]["atlases"][atlas_name]["additions"].extend(subs)
 
         # Layout handling
-        for dcx_name, data in dcx_ops.items():
-            base_name = Path(dcx_name)
+        for dcx_path, data in dcx_ops.items():
 
-            if dcx_name not in self.LAYOUT_FILES:
+            if dcx_path not in self.LAYOUT_FILES:
                 continue
 
-            logger.info("Processing layout for: %s", base_name)
+            logger.info("Processing layout for: %s", dcx_path)
 
-            layout_objs = list(self.LAYOUT_FILES[dcx_name])
+            layout_objs = list(self.LAYOUT_FILES[dcx_path])
 
             layout_map = {
                 replaceTerms(Path(layout.imagePath).stem, {"_h": "", "_l": ""}): layout # atlas name to AtlasLayout objects
                 for layout in layout_objs
             }
 
-            filename = base_name.name.split('.')[0]
+            filename = dcx_path.name.split('.')[0]
             if self.game.name == "Nightreign":
                 filename = replaceTerms(filename, {"_h": "", "_l": ""})
 
@@ -431,7 +428,7 @@ class WriteWorker(QObject):
                     layout_objs.append(new_layout)
                     layout_map[atlas_name] = new_layout
 
-            file = base_name.name.replace('.tpf.dcx', '.sblytbnd.dcx')
+            file = dcx_path.name.replace('.tpf.dcx', '.sblytbnd.dcx')
             AtlasLayout.build(
                 layout_objs=layout_objs,
                 root=root,

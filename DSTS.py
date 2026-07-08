@@ -237,7 +237,7 @@ class TextureStudio(QMainWindow):
 
             current = self.atlas_list.currentItem()
             atlas_name = current.data(Qt.UserRole)
-            dcx_file = Path(current.data(Qt.UserRole + 1))
+            dcx_file = current.data(Qt.UserRole + 1)
             sub_name = item.data(Qt.UserRole)
 
             modify = self.isModified(dcx_file, atlas_name, sub_name)
@@ -266,7 +266,7 @@ class TextureStudio(QMainWindow):
                 return
 
             atlas_name = item.data(Qt.UserRole)
-            dcx_file = Path(item.data(Qt.UserRole + 1))
+            dcx_file = item.data(Qt.UserRole + 1)
 
             modify = self.isModified(dcx_file, atlas_name)
             if modify == Modified.FALSE:
@@ -294,7 +294,7 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
+        dcx_file = atlas_item.data(Qt.UserRole+1)
         sub_name = sub_item.data(Qt.UserRole)
 
         self.atlases.get(atlas_name, {}).rem(sub_name)
@@ -332,7 +332,7 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
+        dcx_file = atlas_item.data(Qt.UserRole+1)
         sub_name = sub_item.data(Qt.UserRole)
 
         repls_file = self.pending_replacements.get(dcx_file, {})
@@ -363,14 +363,14 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
+        dcx_file = atlas_item.data(Qt.UserRole+1)
         old_name = sub_item.data(Qt.UserRole)
 
         dialog = TextureNamePrompt(resizeprompt=False, halfprompt=False, padprompt=False)
         if not dialog.exec():
             return
 
-        new_name, _ = dialog.get_result()
+        new_name, *_ = dialog.get_result()
 
         if self.atlases.get(atlas_name, {}).fetch(new_name): # returns None if SubTexture of that name isn't found
             showError(f"A subtexture named '{new_name}' already exists!")
@@ -398,7 +398,7 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
+        dcx_file = atlas_item.data(Qt.UserRole+1) # do NOT ensure Path as custom is "None" as str
 
         pending = self.pending_new_atlases.get(dcx_file, [])
         self.pending_new_atlases[dcx_file] = [a for a in pending if a.name != atlas_name]
@@ -428,8 +428,8 @@ class TextureStudio(QMainWindow):
             return
 
         old_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
-        dialog = TextureNamePrompt(mode=ImageType.Texture)
+        dcx_file = atlas_item.data(Qt.UserRole+1) # do NOT ensure Path as custom is "None" as str
+        dialog = TextureNamePrompt(mode=ImageType.Texture, formatprompt=False, blankprompt=False)
 
         if not dialog.exec():
             return
@@ -473,7 +473,7 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
+        dcx_file = atlas_item.data(Qt.UserRole+1)
 
         repls = self.pending_replacements.get(dcx_file, {})
         atlas_repls = repls.get(atlas_name, {})
@@ -571,15 +571,20 @@ class TextureStudio(QMainWindow):
             return
 
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(atlas_item.data(Qt.UserRole+1))
-        subs = self.atlases.get(atlas_name, {}).subtextures
+        dcx_file = atlas_item.data(Qt.UserRole+1)
+        atlas_obj = self.atlases.get(atlas_name)
+        subs = atlas_obj.subtextures
+
+        if not subs and not any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(dcx_file, [])):
+            showError("This atlas isn't mapped, sorry!")
+            return
+        
+        if atlas_obj.parent == "None":
+            showError("This file has no layout.")
+            return
 
         match mode:
             case IconMode.Append:
-                if not subs and not any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(dcx_file, [])):
-                    showError("This atlas isn't mapped, sorry!")
-                    return
-    
                 dialog = TextureNamePrompt()
                 if not dialog.exec():
                     return
@@ -647,7 +652,7 @@ class TextureStudio(QMainWindow):
         })
 
         self.pending_additions[dcx_file]["additions"].append(sub)
-        self.atlases[atlas_name].add(sub)
+        atlas_obj.add(sub)
 
         self.rebuildAtlas(atlas_name, dcx_file)
         self.showAtlas(atlas_item)
@@ -1054,7 +1059,6 @@ class TextureStudio(QMainWindow):
 
     def queueReplacement(self, dcx_file: Path, atlas_item, sub_item, img_path: Path):
         atlas_name = atlas_item.data(Qt.UserRole)
-        dcx_file = Path(dcx_file)
         sub_name = sub_item.data(Qt.UserRole) if sub_item else "*Self*"
 
         try:
@@ -1095,8 +1099,13 @@ class TextureStudio(QMainWindow):
             return
         
         atlas = self.atlas_list.currentItem()
+        atlas_name = atlas.data(Qt.UserRole)
         sub = self.subtexture_list.currentItem()
         dcx_file = atlas.data(Qt.UserRole+1)
+        atlas_obj = self.atlases.get(atlas_name)
+
+        if atlas_obj.parent == "None":
+            showError("Custom files cannot be replaced.\nTry deleting it and making a new one with the image you want.")
 
         if not atlas:
             showError('No atlas loaded!')
@@ -1106,7 +1115,7 @@ class TextureStudio(QMainWindow):
         if not img_path or img_path == BLANK_PATH:
             return
         
-        self.queueReplacement(Path(dcx_file), atlas, sub, Path(img_path))
+        self.queueReplacement(dcx_file, atlas, sub, img_path)
 
     def applyChanges(self):
         """Start replacement from File menu and create popup."""
@@ -1164,6 +1173,9 @@ class TextureStudio(QMainWindow):
             if kb < 1024:
                 return f"{kb:.1f} KB"
             return f"{kb / 1024:.2f} MB"
+        
+        if isinstance(file, Path):
+            file = file.name
         
         width, height = pil_img.size
         g = gcd(width, height)
@@ -1267,7 +1279,7 @@ class TextureStudio(QMainWindow):
 
         if atlas_name not in self.thumbnail_cache:
             atlas_item = self.atlas_list.currentItem()
-            dcx_file = Path(atlas_item.data(Qt.UserRole+1)).name
+            dcx_file = atlas_item.data(Qt.UserRole+1)
             self.rebuildAtlas(atlas_name, dcx_file)
 
         img = self.thumbnail_cache.get(atlas_name)
@@ -1289,8 +1301,9 @@ class TextureStudio(QMainWindow):
             if self.pending_replacements.get(dcx_file, {}).get(atlas_name) == "*Self*":
                 return Modified.REPLACED
 
-            if any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(dcx_file, [])):
-                return Modified.ADDED
+            for fl in (dcx_file, "None"): # also check parentless files, aka custom
+                if any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(fl, [])):
+                    return Modified.ADDED
 
             return Modified.FALSE
         
@@ -1307,7 +1320,7 @@ class TextureStudio(QMainWindow):
         if not current:
             return
         atlas_name = current.data(Qt.UserRole)
-        dcx_file = Path(current.data(Qt.UserRole+1))
+        dcx_file = current.data(Qt.UserRole+1)
         self.current_atlas = atlas_name
         self.current_crop = None
 
@@ -1347,7 +1360,7 @@ class TextureStudio(QMainWindow):
         self.subtexture_list.blockSignals(False)
         self.subtexture_list.sortItems()
 
-        self.info_label.setText(self.formatImageInfo(atlas_name, dcx_file.name, atlas_img, img_type=current.data(Qt.UserRole+2)))
+        self.info_label.setText(self.formatImageInfo(atlas_name, dcx_file, atlas_img, img_type=current.data(Qt.UserRole+2)))
         self.toggleCustomNames() # just to update it
 
     def showSubtexture(self, current):
@@ -1359,7 +1372,9 @@ class TextureStudio(QMainWindow):
             name = current.data(Qt.UserRole)
             st = self.atlases[self.current_atlas].fetch(name)
             atlas_img = self.getPilImage(self.current_atlas)
-            dcx_file = self.atlas_list.currentItem().data(Qt.UserRole+1).name
+            dcx_file = self.atlas_list.currentItem().data(Qt.UserRole+1)
+            if isinstance(dcx_file, Path):
+                dcx_file = dcx_file.name
         except KeyError:
             self.subtexture_list.blockSignals(False)
             return
@@ -1448,8 +1463,8 @@ def main():
     window = TextureStudio(project_dir=base_path)
     window.show()
 
-    logger.info("Application Started.")
     addQtHandler(logger, window.logSignal)
+    logger.info("Application Started.")
     if len(sys.argv) > 1:
         filename = sys.argv[1]
         logger.info("Autorunning file passed as argument: %s", filename)
