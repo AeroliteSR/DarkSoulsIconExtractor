@@ -54,12 +54,12 @@ class DCXVersionInfo(tp.NamedTuple):
     def __repr__(self) -> str:
         """Convert `int` fields to hex strings."""
         s = f"DCXVersionInfo("
-        for _field in self.__annotations__:
-            v = getattr(self, _field)
+        for field in self._fields:
+            v = getattr(self, field)
             if isinstance(v, int):
-                s += f"{_field}={hex(v)}, "
+                s += f"{field}={hex(v)}, "
             else:
-                s += f"{_field}={v}, "
+                s += f"{field}={v}, "
         return s[:-2] + ")"
 
 
