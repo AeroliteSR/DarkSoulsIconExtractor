@@ -1,0 +1,2 @@
+# CLI
+The first argument passed to this application's binary will be taken as an input file and be automatically loaded. This can be done through cli, by dragging a tpf/tpf.dcx file onto the exe, or using the "Open With" feature if you enabled file associations during installation.

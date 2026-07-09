@@ -1,0 +1,31 @@
+site_name: Dark Souls Texture Studio
+site_description: Documentation for Dark Souls Texture Studio
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md
+
+  - Getting Started:
+    - Installation: installation.md
+    - Supported Games: supported-games.md
+    - Building from source: building.md
+
+  - User Guide:
+    - Introduction: introduction.md
+    - Settings: settings.md
+    - Exporting Textures: exporting.md
+    - Replacing Textures: replacing.md
+    - Adding Custom Atlases/Icons: customicons.md
+    - Creating a Custom File: customfiles.md
+
+  - Other Features: features.md
+
+  - Troubleshooting: troubleshooting.md
+
+  - Advanced:
+    - cli: cli.md
+    - Console: console.md
+
+  - Contact Me: contact.md
