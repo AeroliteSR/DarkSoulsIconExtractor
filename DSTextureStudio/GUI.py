@@ -1,12 +1,16 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
-from PySide6.QtGui import QPalette, QPainter, QAction
+from PySide6.QtGui import QPalette, QPainter, QAction, QCursor
 from DSTextureStudio.GameInfo import Types
 from DSTextureStudio.Enums import Game, ImageType
 import re
 from pathlib import Path
 from soulstruct.dcx.core import DCXType
+import pyperclip
+import logging
+
+logger = logging.getLogger(__name__)
 
 class NaturalListItem(QListWidgetItem):
     def __init__(self, text):
@@ -606,7 +610,7 @@ class ImageViewer(QGraphicsView):
 
         self.scene().setSceneRect(self.pixmap_item.boundingRect().adjusted(-100, -100, 100, 100))
 
-        self.hud = QLabel("ESC / RMB to close\nR to reset", self)
+        self.hud = QLabel("ESC / RMB to close\nR to reset\nC to copy pixel data", self)
         self.hud.setStyleSheet("""
             QLabel {
                 color: white;
@@ -640,6 +644,41 @@ class ImageViewer(QGraphicsView):
 
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
+
+    def getColorData(self):
+        scene_pos = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
+
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+
+        if 0 <= x < self.image.width() and 0 <= y < self.image.height():
+
+            color = self.image.pixelColor(x, y)
+
+            r = color.red()
+            g = color.green()
+            b = color.blue()
+            a = color.alpha()
+
+            hex_rgba = "#{:02X}{:02X}{:02X}{:02X}".format(r, g, b, a)
+            hsv = color.getHsv()
+            #h, s, l, _ = color.getHsl()
+            lum = int(0.2126 * r + 0.7152 * g + 0.0722 * b)
+
+            return (r, g, b, a), (
+                f"X: {x}  Y: {y}\n"
+                f"RGBA: {r}, {g}, {b}, {a}\n"
+                f"HEX: {hex_rgba}\n"
+                f"HSV: {hsv[0]}, {hsv[1]}, {hsv[2]}\n"
+                #f"HSL: {h}°, {s/255*100:.1f}%, {l/255*100:.1f}%\n"
+                f"Lum: {lum} ({lum/255*100:.1f}%)"
+            )
+        return (0, 0, 0, 0), ""
+
+    def copyData(self):
+        rgba, text = self.getColorData()
+        pyperclip.copy(text)
+        logger.info("Copied pixel data to clipboard: %s", rgba)
 
     def resetView(self):
         self.resetTransform()
@@ -682,39 +721,18 @@ class ImageViewer(QGraphicsView):
             self.resetView()
             return
         
+        if event.key() == Qt.Key_C:
+            self.copyData()
+            return
+        
     def mouseMoveEvent(self, event):
-        scene_pos = self.mapToScene(event.pos())
-
-        x = int(scene_pos.x())
-        y = int(scene_pos.y())
-
-        if 0 <= x < self.image.width() and 0 <= y < self.image.height():
-
-            color = self.image.pixelColor(x, y)
-
-            r = color.red()
-            g = color.green()
-            b = color.blue()
-            a = color.alpha()
-
-            hex_rgba = "#{:02X}{:02X}{:02X}{:02X}".format(r, g, b, a)
-            hsv = color.getHsv()
-            #h, s, l, _ = color.getHsl()
-            lum = int(0.2126 * r + 0.7152 * g + 0.0722 * b)
-
-            self.pixel_info.setText(
-                f"X: {x}  Y: {y}\n"
-                f"RGBA: {r}, {g}, {b}, {a}\n"
-                f"HEX: {hex_rgba}\n"
-                f"HSV: {hsv[0]}, {hsv[1]}, {hsv[2]}\n"
-                #f"HSL: {h}°, {s/255*100:.1f}%, {l/255*100:.1f}%\n"
-                f"Lum: {lum} ({lum/255*100:.1f}%)"
-            )
-            self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
-            self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
-
-            self.pixel_info.adjustSize()
-            self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
+        rgba, text = self.getColorData()
+        self.pixel_info.setText(text)
+        r, g, b, a = rgba
+        self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
+        self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
+        self.pixel_info.adjustSize()
+        self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
 
         super().mouseMoveEvent(event)
 
