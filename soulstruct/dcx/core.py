@@ -138,7 +138,7 @@ class DCXType(Enum):
                 return cls.Unknown
 
             header_version_info = header.get_version_info()
-            for dcx_type, version_info in DCX_VERSION_INFO.items():
+            for version_info, dcx_type in DCX_VINFO_TO_TYPE.items(): # modified in DSTS
                 if version_info is None:
                     continue
                 if version_info == header_version_info:
@@ -163,6 +163,19 @@ DCX_VERSION_INFO = {
     DCXType.DCX_DFLT_11000_44_9_15: DCXVersionInfo(b"DFLT", 0x11000, 0x44, 0x4C, 9,    0,       0xF000000, 0x010100),
     DCXType.DCX_KRAK:               DCXVersionInfo(b"KRAK", 0x11000, 0x44, 0x4C, 6,    0,       0,         0x010100),
     DCXType.DCX_ZSTD:               DCXVersionInfo(b"ZSTD", 0x11000, 0x44, 0x4C, None, 0,       0,         0x010100),
+}
+
+DCX_VINFO_TO_TYPE = { # Created in DSTS to handle how AC6 uses a compression level of 9 instead of 6 for KRAK. Fixes crash but layouts still won't load. TODO: figure out.
+    None: DCXType.DCP_DFLT,
+    DCXVersionInfo(b"EDGE", 0x10000, 0x24, None, 9,    0x10000, 0,         0x100100): DCXType.DCX_EDGE,
+    DCXVersionInfo(b"DFLT", 0x10000, 0x24, 0x2C, 9,    0,       0,         0x010100): DCXType.DCX_DFLT_10000_24_9,
+    DCXVersionInfo(b"DFLT", 0x10000, 0x44, 0x4C, 9,    0,       0,         0x010100): DCXType.DCX_DFLT_10000_44_9,
+    DCXVersionInfo(b"DFLT", 0x11000, 0x44, 0x4C, 8,    0,       0,         0x010100): DCXType.DCX_DFLT_11000_44_8,
+    DCXVersionInfo(b"DFLT", 0x11000, 0x44, 0x4C, 9,    0,       0,         0x010100): DCXType.DCX_DFLT_11000_44_9,
+    DCXVersionInfo(b"DFLT", 0x11000, 0x44, 0x4C, 9,    0,       0xF000000, 0x010100): DCXType.DCX_DFLT_11000_44_9_15,
+    DCXVersionInfo(b"KRAK", 0x11000, 0x44, 0x4C, 6,    0,       0,         0x010100): DCXType.DCX_KRAK,
+    DCXVersionInfo(b"KRAK", 0x11000, 0x44, 0x4C, 9,    0,       0,         0x010100): DCXType.DCX_KRAK,
+    DCXVersionInfo(b"ZSTD", 0x11000, 0x44, 0x4C, None, 0,       0,         0x010100): DCXType.DCX_ZSTD,
 }
 
 
