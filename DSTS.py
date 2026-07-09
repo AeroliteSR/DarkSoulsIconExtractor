@@ -6,6 +6,7 @@ from pathlib import Path
 from collections import defaultdict
 from PIL import Image, UnidentifiedImageError
 from math import gcd
+from webbrowser import open_new_tab
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
@@ -185,7 +186,7 @@ class TextureStudio(QMainWindow):
         self.searchButton = menu.addAction(createAction("Search", self.openSearchWindow))
 
         self.help_menu = menu.addMenu("Help")
-        self.help_menu.addAction(createAction("Settings", lambda: QMessageBox.information(self, "Settings", "<b>Custom Names:</b><br> When enabled, this setting replaces" \
+        self.help_menu.addAction(createAction("Settings", lambda: QMessageBox.information(self, "Settings Info", "<b>Custom Names:</b><br> When enabled, this setting replaces" \
                                                                                                 " most atlas and subtexture names with more user-friendly ones. " \
                                                                                                 "The new atlas names were written manually by me, and are not " \
                                                                                                 "perfect. However, they may help someone less familiar with fromsoft " \
@@ -212,18 +213,12 @@ class TextureStudio(QMainWindow):
                                                                                                 "<b>Alpha Threshold:</b><br>" \
                                                                                                 "Any pixel with an alpha value less than or equal to this number " \
                                                                                                 "will have their RGB values set to 0. Click to update the value.")))
-        self.help_menu.addAction(createAction("Replacement", lambda: QMessageBox.information(self, "Replacement", 
-                                                                                         "Pressing \"Replace\" will prompt you for an image file.<br>" \
-                                                                                         "DSTS will then replace the currently selected texture, whether that be" \
-                                                                                         " an atlas or a subtexture.<br><br>After replacing, go to" \
-                                                                                         " File->Apply Changes to save. This may take a while.")))
-        self.help_menu.addAction(createAction("Adding Icons", lambda: QMessageBox.information(self, "Adding Icons", 
-                                                                                         "Pressing \"Add\" will prompt you for an image file.<br>" \
-                                                                                         "DSTS will then append the image to the current selected atlas," \
-                                                                                         " if possible.<br><br>Afterwards, go to" \
-                                                                                         " File->Apply Changes to save. This may take a while.")))
-        self.help_menu.addAction(createAction("About", lambda: QMessageBox.information(self, "About", 
-                                                                                       "Made by <a href='https://linktr.ee/aerolitesr'>Aero</a> :><br><br>")))
+        self.help_menu.addAction(createAction("Documentation", lambda: open_new_tab("https://darksoulstexturestudio.readthedocs.io/en/latest/")))
+        self.help_menu.addSeparator()
+        self.help_menu.addAction(createAction("Hello", lambda: QMessageBox.information(self, "Hello", 
+                                                                                       "<span style=\"font-size:18pt;\">" \
+                                                                                       "Heyo o/<br>" \
+                                                                                       "- <a href='https://linktr.ee/aerolitesr'>Aero</a> :><br><br> </span>")))
         self.help_menu.addSeparator()
         self.help_menu.addAction(createAction("Console", self.console.show))
 
