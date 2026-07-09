@@ -1408,9 +1408,6 @@ class TextureStudio(QMainWindow):
                     self.saveAll()
                     return
 
-            out_path = self.project_dir / "Output" / ".Atlases"
-            out_path.mkdir(parents=True, exist_ok=True)
-
             gridOverlay = self.btn_atlasGrid.isChecked()
             if gridOverlay:
                 answer = showQuery('Export', 'You currently have the Grid Overlay enabled, do you want to keep it in the image for this export?')

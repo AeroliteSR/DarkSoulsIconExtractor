@@ -90,7 +90,7 @@ def createDebugGrid(image, subtextures):
     debug = image.copy()
     draw = ImageDraw.Draw(debug)
 
-    for icn in subtextures.values():
+    for icn in subtextures:
         width = icn.width
         height = icn.height
         x = icn.x
