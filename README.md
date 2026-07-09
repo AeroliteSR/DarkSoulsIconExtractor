@@ -1,5 +1,8 @@
 # DSTS: Dark Souls Texture Studio
 A simple GUI application for managing icons and UI textures in FromSoftware games.  
+  
+For more information, please visit the [Documentation](https://darksoulstexturestudio.readthedocs.io/en/latest/).  
+
 ## Supports:
 | Game       | Preview | Export | Replace | Add |
 |------------|---------|--------|---------|-----|
@@ -9,6 +12,7 @@ A simple GUI application for managing icons and UI textures in FromSoftware game
 | DS3        |   ✅    |  ✅    |   ✅    | ✅  |
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
+| AC6        |   ✅    |  ✅    |   ✅    | ❌  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |
 | NR         |   ✅    |  ✅    |   ✅    | ✅  |  
   
