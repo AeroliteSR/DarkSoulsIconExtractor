@@ -24,7 +24,8 @@ from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, 
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
-from DSTextureStudio.log_utils import setuplog, ConsoleWindow, addQtHandler, handle_exception
+from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
+from DSTextureStudio.Console import ConsoleWindow
 
 BLANK_PATH = Path('.')
 
@@ -53,7 +54,7 @@ class TextureStudio(QMainWindow):
         self.RESOLUTIONS = {}
         self.game = Game(None)
 
-        self.console = ConsoleWindow(self)
+        self.console = ConsoleWindow(self, emitter=log_emitter)
         self.console.set_objects(
             instance=lambda: self,
             atlases=lambda: self.atlases,
@@ -1455,7 +1456,7 @@ def main():
     window = TextureStudio(project_dir=base_path)
     window.show()
 
-    addQtHandler(logger, window.logSignal)
+    addQtHandler(logger, window.logSignal, log_emitter)
     logger.info("Application Started.")
     if len(sys.argv) > 1:
         filename = sys.argv[1]
@@ -1465,8 +1466,9 @@ def main():
 
 if __name__ == "__main__":
     sys.excepthook = handle_exception
-    global logger
+    global logger, log_emitter
     logger = setuplog()
+    log_emitter = LogEmitter()
     main()
 
 # nuitka --standalone --onefile --windows-console-mode=disable --enable-plugin=pyside6 --windows-icon-from-ico=icon.ico --include-data-file=icon.ico=icon.ico --include-data-file=soulstruct\base\textures\texconv.exe=soulstruct\base\textures\texconv.exe --include-module=constrata --include-module=soulstruct --msvc=latest --lto=yes DSTS.py
