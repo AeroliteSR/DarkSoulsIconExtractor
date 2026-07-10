@@ -17,6 +17,7 @@ The console is a new addition to DSTS, added in version 3.6.1. It allows viewing
  - atlases: Returns dict for internal `instance.atlases`. Maps atlas name to Atlas object.
  - cache: Prints preview image cache. Maps atlas name to PIL Image object. Internally, `instance.thumbnail_cache`.
  - changes: Returns ALL changes, same as calling `additions`, `replacements`, and `new`
+ - game: Returns currently loaded Game type. Internally, `instance.game`.
  - crop: Returns PIL Image object for subtexture preview. Atlases are None.
  - current: Returns name of currently selected atlas. Acts as a variable in commands.
  - instance: A reference to the TextureStudio instance, aka the application itself. Mostly useful for inspecting internal variables in dev mode.

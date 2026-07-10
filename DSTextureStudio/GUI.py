@@ -804,6 +804,7 @@ def gameTypeDialog() -> Game:
         "Dark Souls 3",
         "Bloodborne",
         "Sekiro",
+        "Armored Core 6",
         "Elden Ring",
         "Nightreign"
     ]

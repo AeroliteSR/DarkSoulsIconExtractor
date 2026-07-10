@@ -59,6 +59,7 @@ class TextureStudio(QMainWindow):
             instance=lambda: self,
             atlases=lambda: self.atlases,
             current=lambda: self.current_atlas,
+            game=lambda: self.game,
             crop=lambda: self.current_crop,
             cache=lambda: self.thumbnail_cache,
             replacements=lambda: self.pending_replacements,
@@ -742,7 +743,7 @@ class TextureStudio(QMainWindow):
             if not dirmode:
                 files += [f for f in file_path.parent.glob("*.sblytbnd.dcx")]
 
-            groups = defaultdict(lambda: {Resolution.HIGH: {}, Resolution.LOW: {}})
+            groups = defaultdict(lambda: {Resolution.HI: {}, Resolution.LOW: {}})
             standalone = []
 
             for f in files:
@@ -750,7 +751,7 @@ class TextureStudio(QMainWindow):
 
                 if "_h." in name:
                     prefix = name.split("_h.")[0]
-                    res = Resolution.HIGH
+                    res = Resolution.HI
                 elif "_l." in name:
                     prefix = name.split("_l.")[0]
                     res = Resolution.LOW
@@ -768,7 +769,7 @@ class TextureStudio(QMainWindow):
             for prefix, data in groups.items():
                 available = []
 
-                for res in [Resolution.HIGH, Resolution.LOW]:
+                for res in [Resolution.HI, Resolution.LOW]:
                     if "tpf" in data[res]:
                         available.append(res)
 
@@ -804,7 +805,7 @@ class TextureStudio(QMainWindow):
 
             file_mappings.extend(standalone) # no layout
 
-        elif self.game.name in ['Sekiro', 'Elden Ring']:
+        elif self.game.name in ['Sekiro', 'Armored Core 6', 'Elden Ring']:
             for f in files:
                 if 'sblytbnd' in str(f):
                     continue
@@ -829,7 +830,7 @@ class TextureStudio(QMainWindow):
                 else:
                     file_mappings.append(f)
 
-                self.RESOLUTIONS[base_name] = Resolution.LOW if path_has_sequence(f.parts, ['menu', 'low']) else Resolution.HIGH
+                self.RESOLUTIONS[base_name] = Resolution.LOW if path_has_sequence(f.parts, ['menu', 'low']) else Resolution.HI
         else:
             file_mappings = files
 

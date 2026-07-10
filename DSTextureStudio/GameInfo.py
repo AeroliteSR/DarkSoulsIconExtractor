@@ -11887,10 +11887,12 @@ class Types():
         "MENU_Ch_",
     ]
 
-    ROOTS = { # maybe in the future if multiple file types use layouts, remove the "\01_Common" hardcode and make it from basename in buildOperations
-        "Sekiro": Path(r"N:\NTC\data\Menu\ScaleForm\SBLayout\01_Common"),
+    LAYOUT_PATHS = { 
+        "Sekiro": r"N:\NTC\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}",
 
-        "Elden Ring": Path(r"N:\GR\data\Menu\ScaleForm\SBLayout\01_Common"),
+        "Elden Ring": r"N:\GR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}",
 
-        "Nightreign": Path(r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common"),
+        "Nightreign": r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\{file}\{format_mode}\{layout_name}",
+
+        "Armored Core 6": r"W:\FNR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}"
     }

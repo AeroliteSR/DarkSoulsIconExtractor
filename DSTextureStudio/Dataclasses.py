@@ -7,8 +7,8 @@ from pathlib import Path
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
-from DSTextureStudio.Helpers import replaceTerms
-from DSTextureStudio.Enums import ImageType
+from DSTextureStudio.Helpers import replaceTerms, getLayoutPath
+from DSTextureStudio.Enums import ImageType, Game
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
@@ -43,13 +43,13 @@ class AtlasLayout:
         obj.add_subtextures(subtextures)
         return obj
 
-    def build(layout_objs: list[AtlasLayout], root: Path|str, output: Path) -> None:
+    def build(layout_objs: list[AtlasLayout], game: Game, res: str, output: Path) -> None:
         """
         Writes a list of AtlasLayouts to sblytbnd.dcx
 
         layout_objs - list of all loaded AtlasLayouts
 
-        root - the texture root for each Layout entry
+        res - resolution layout is for. Eg. Hi/Low.
 
         output - where to write dcx to"""
 
@@ -61,12 +61,17 @@ class AtlasLayout:
 
         for atlas in layout_objs:
             xml_bytes = ET.tostring(atlas.element, encoding='utf-8', method='xml')
-            layout_name = replaceTerms(atlas.imagePath, {'.png': '.layout', '.tif': '.layout'})
+            layout_path = getLayoutPath(
+                game=game.name,
+                file="01_Common", # maybe one day this will need to be dynamically fetched, right now only these files have layouts anyway.
+                format_mode=res,
+                layout_name=Path(replaceTerms(atlas.imagePath, {'.png': '.layout', '.tif': '.layout'})).name # only eg. "name.layout", not full path
+            )
 
             entry = BinderEntry(
                 data=xml_bytes,
                 entry_id=binder.get_first_new_entry_id_in_range(0, 1000000),
-                path=str(root / layout_name),
+                path=layout_path,
                 flags=0x2
             )
 

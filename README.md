@@ -12,7 +12,7 @@ For more information, please visit the [Documentation](https://darksoulstextures
 | DS3        |   ✅    |  ✅    |   ✅    | ✅  |
 | BB         |   ✅    |  ✅    |   ❌    | ❌  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
-| AC6        |   ✅    |  ✅    |   ✅    | ❌  |
+| AC6        |   ✅    |  ✅    |   ✅    | ✅  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |
 | NR         |   ✅    |  ✅    |   ✅    | ✅  |  
   

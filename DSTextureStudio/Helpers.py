@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
 from DSTextureStudio.Enums import Game
 from DSTextureStudio.GUI import gameTypeDialog
+from DSTextureStudio.GameInfo import Types
 from soulstruct.dcx import core
 import tempfile
 
@@ -75,6 +76,8 @@ def parseGameType(path) -> Game:
         game_type = 'Bloodborne'
     elif path_has_sequence(parts, ["steamapps", "common", "Sekiro"]):
         game_type = 'Sekiro'
+    elif path_has_sequence(parts, ["steamapps", "common", "ARMORED CORE VI FIRES OF RUBICON"]):
+        game_type = "Armored Core 6"
     elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING NIGHTREIGN"]):
         game_type = 'Nightreign'
     elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING"]):
@@ -124,3 +127,15 @@ def createBlankImage(dimensions: tuple) -> str:
 
     return temp_file.name
 
+def getLayoutPath(game, **kwargs):
+    """
+    Returns full virtual path for a layout file including common root.
+    
+    Expects:
+    
+    file - parent file, eg. '01_Common`
+    
+    format_mode - what resolution the file is for. generally hi/low
+    
+    layout_name - name of the .layout file"""
+    return Types.LAYOUT_PATHS[game].format(**kwargs)

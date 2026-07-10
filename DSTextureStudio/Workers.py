@@ -16,9 +16,9 @@ from PySide6.QtCore import QObject, Signal
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture
 from soulstruct.dcx import core
 # Custom
-from DSTextureStudio.GameInfo import Maps, Types
+from DSTextureStudio.GameInfo import Maps
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
-from DSTextureStudio.Enums import ExportMode, ResFormat, Resolution, Game, GameType
+from DSTextureStudio.Enums import ExportMode, Resolution, Game, GameType
 from DSTextureStudio.Helpers import replaceTerms, createDebugGrid, getLayoutData
 from DSTextureStudio.GUI import getOutputPath
 from DSTextureStudio.log_utils import format_exc_clean
@@ -38,16 +38,17 @@ class LoadWorker(QObject):
 
     def run(self):
         try:
+            logger.info("Beginning unpack for: %s", self.game)
             match self.game.type:
                 case GameType.MODERN:
-                    logger.info("Beginning unpack for game type: Modern")
                     self.processModern()
-                case GameType.OLD | GameType.PS:
-                    logger.info("Beginning unpack for game type: Legacy")
-                    self.processOld()
+
+                case GameType.LEGACY | GameType.PS:
+                    self.processLegacy()
+
                 case _:
-                    logger.info("Beginning unpack with unknown game type, defaulting to Legacy")
-                    self.processOld()
+                    logger.info("Unknown game type %s, defaulting to Legacy", self.game)
+                    self.processLegacy()
         except:
             self.finished.emit({}, {}, {}, format_exc_clean())
 
@@ -120,22 +121,22 @@ class LoadWorker(QObject):
                 root = ET.fromstring(layout_xml, parser=ET.XMLParser(encoding="utf-8"))
                 self.progress.emit(percent, "Parsing layout XML...")
 
-                atlas_nodes = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
-                self.LAYOUT_DATA[file['file']] = atlas_nodes
+                atlas_layouts = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
+                self.LAYOUT_DATA[file['file']] = atlas_layouts
 
 
                 layout_lookup = {
                     Path(atlas.imagePath).stem: atlas
-                    for atlas in atlas_nodes
+                    for atlas in atlas_layouts
                 }
 
-                logger.info("Successfully loaded %i atlas nodes.", len(atlas_nodes))
+                logger.info("Successfully loaded %i shoebox layouts", len(atlas_layouts))
 
                 for filename, texture in textures_dict.items():
                     texture_atlas = layout_lookup.get(filename)
 
                     if texture_atlas is None:
-                        logger.warning("Creating Atlas object with no SubTextures for Texture with no Layout: '%s'", filename)
+                        logger.debug("Creating Atlas object with no SubTextures for Texture with no Layout: '%s'", filename)
                         subtextures = []
                     else:
                         subtextures = [
@@ -171,7 +172,7 @@ class LoadWorker(QObject):
         self.finished.emit(atlases, self.LOADED_DCX_FILES, self.LAYOUT_DATA, "")
         self.progress.emit(100, 'Successfully loaded all files!')
 
-    def processOld(self):  
+    def processLegacy(self):  
         atlases: dict[str, Atlas] = {}
         total_files = len(self.file_mappings)
 
@@ -396,11 +397,11 @@ class WriteWorker(QObject):
             }
 
             filename = dcx_path.name.split('.')[0]
+            res = self.RESOLUTIONS.get(filename, Resolution.HI).display # fallback to high *just* in case
             if self.game.name == "Nightreign":
                 filename = replaceTerms(filename, {"_h": "", "_l": ""})
-
-            game_format_mode = ResFormat.from_name(self.game.name).get(self.RESOLUTIONS.get(filename, Resolution.HIGH))
-            root = Types.ROOTS.get(self.game.name, "") / game_format_mode
+                if res == "Hi":
+                    res = "High" # NR is the ONLY game that usese a different name for ts
 
             for atlas_name, atlas_ops in data["atlases"].items():
                 additions = atlas_ops["additions"]
@@ -416,9 +417,15 @@ class WriteWorker(QObject):
                 else:
                     logger.info("Creating layout entry for '%s' with %i subtexture(s)", atlas_name, len(additions))
 
-                    imgpath = (rf"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{game_format_mode}\{atlas_name}.tif"
-                            if self.game.name == "Nightreign"
-                            else f"{atlas_name}.png")
+                    match self.game.name:
+                        case "Nightreign":
+                            imgpath = rf"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
+
+                        case "Armored Core 6":
+                            imgpath = rf"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
+
+                        case _:
+                            imgpath = f"{atlas_name}.png"
 
                     new_layout = AtlasLayout.create(
                         image_path=imgpath,
@@ -431,7 +438,8 @@ class WriteWorker(QObject):
             file = dcx_path.name.replace('.tpf.dcx', '.sblytbnd.dcx')
             AtlasLayout.build(
                 layout_objs=layout_objs,
-                root=root,
+                game=self.game,
+                res=res,
                 output=self.output_dir / file
             )
             logger.info("Successfully wrote file: %s", file)
