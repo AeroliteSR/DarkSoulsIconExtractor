@@ -456,7 +456,7 @@ class TextureNamePrompt(QDialog):
                     "Warning",
                     QMessageBox.Warning)
 
-            name = f"{self.prefix_input.currentText()}_{image_id}"
+            name = f"{self.prefix_input.currentText()}{image_id}"
 
             if self.padprompt:
                 return name, self.padding_input.value(), resize, half
@@ -538,7 +538,7 @@ class DefineSubtexturePrompt(QDialog):
         
         hwcoords = (self.width_input.value(), self.height_input.value())
         xycoords = (self.x_input.value(), self.y_input.value())
-        return f"{self.prefix_input.currentText()}_{id}", hwcoords, xycoords, half
+        return f"{self.prefix_input.currentText()}{id}", hwcoords, xycoords, half
 
 class CompressionPrompt(QDialog):
     def __init__(self, name):

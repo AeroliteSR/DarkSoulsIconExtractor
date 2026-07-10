@@ -11876,15 +11876,15 @@ class Types():
     }
 
     SubtexturePrefix = [
-        "MENU_ItemIcon",
-        "MENU_Knowledge",
-        "MENU_MAP",
-        "MENU_StatusIcon",
-        "MENU_SkillStory",
-        "MENU_ItemBase",
-        "MENU_SaveIcon",
-        "MENU_RE",
-        "MENU_Ch",
+        "MENU_ItemIcon_",
+        "MENU_Knowledge_",
+        "MENU_MAP_",
+        "MENU_StatusIcon_",
+        "MENU_SkillStory_",
+        "MENU_ItemBase_",
+        "MENU_SaveIcon_",
+        "MENU_RE_",
+        "MENU_Ch_",
     ]
 
     ROOTS = { # maybe in the future if multiple file types use layouts, remove the "\01_Common" hardcode and make it from basename in buildOperations
