@@ -13,15 +13,15 @@ import threading
 # GUI
 from PySide6.QtCore import QObject, Signal
 # Soulstruct
-from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture
+from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
 # Custom
 from DSTextureStudio.GameInfo import Maps
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, Resolution, Game, GameType
-from DSTextureStudio.Helpers import replaceTerms, createDebugGrid, getLayoutData
-from DSTextureStudio.GUI import getOutputPath
+from DSTextureStudio.Helpers import createDebugGrid, getLayoutData
 from DSTextureStudio.log_utils import format_exc_clean
+from DSTextureStudio.Utilities import replaceTerms
 
 logger = logging.getLogger(__name__)
 
@@ -278,11 +278,7 @@ class ExtractWorker(QObject):
             match self.filetype:
                 case 'dds':
                     texture: TPFTexture = self.atlases[atlas_name].texture
-                    output_path = getOutputPath()
-                    if not output_path:
-                        return
-                    output_path.mkdir(parents=True, exist_ok=True)
-                    texture.write_dds(output_path / f"{atlas_name}.dds")
+                    texture.write_dds(self.output_dir / f"{atlas_name}.dds")
                     self.progress.emit(100, f"Exported atlas: {atlas_name}")
 
                 case _:
@@ -498,7 +494,7 @@ class WriteWorker(QObject):
                         atlas_img.save(temp_path)
                     try:
                         texture = TPF.find_texture_stem(base, atlas_name)
-                        texture.replace_dds(temp_path)
+                        texture.replace_dds(temp_path, dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name, swizzle=(self.game.name == "Bloodborne"))
                     finally:
                         if os.path.exists(temp_path):
                             os.remove(temp_path)

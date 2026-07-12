@@ -6,6 +6,7 @@ from PySide6.QtGui import QPixmap, QImage
 from DSTextureStudio.Enums import Game
 from DSTextureStudio.GUI import gameTypeDialog
 from DSTextureStudio.GameInfo import Types
+from DSTextureStudio.Utilities import path_has_sequence
 from soulstruct.dcx import core
 import tempfile
 
@@ -47,18 +48,6 @@ def cleanByAlpha(img: Image.Image, threshold: int = 5) -> Image.Image:
     mask = arr[..., 3] <= threshold
     arr[mask, :3] = 0
     return Image.fromarray(arr, "RGBA")
-
-def replaceTerms(text, terms: dict):
-    if text:
-        for term, replacement in terms.items():
-            text = text.replace(term, replacement)
-    return text
-    
-def path_has_sequence(parts, sequence):
-        for i in range(len(parts) - len(sequence) + 1):
-            if parts[i:i+len(sequence)] == tuple(sequence):
-                return True
-        return False
 
 def parseGameType(path) -> Game:
     game_type = None

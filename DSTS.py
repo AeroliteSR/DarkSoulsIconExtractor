@@ -20,12 +20,13 @@ from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 from DSTextureStudio.GameInfo import Maps, Types
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
-from DSTextureStudio.Helpers import replaceTerms, checkGame, path_has_sequence, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
+from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
+from DSTextureStudio.Utilities import replaceTerms, path_has_sequence
 
 BLANK_PATH = Path('.')
 
@@ -571,10 +572,6 @@ class TextureStudio(QMainWindow):
         dcx_file = atlas_item.data(Qt.UserRole+1)
         atlas_obj = self.atlases.get(atlas_name)
         subs = atlas_obj.subtextures
-
-        if not subs and not any(atlas_name == atlas.name for atlas in self.pending_new_atlases.get(dcx_file, [])):
-            showError("This atlas isn't mapped, sorry!")
-            return
         
         if atlas_obj.parent == "None":
             showError("This file has no layout.")
@@ -1064,7 +1061,11 @@ class TextureStudio(QMainWindow):
             showError("Selected file is not an image supported by PIL.")
             return
 
-        if sub_name and sub_name != "*Self*":
+        if sub_name == "*Self*": # atlas replacement
+            atlas_img = self.getBaseImage(atlas_name)
+            new_img = new_img.resize((atlas_img.width, atlas_img.height), Image.Resampling.LANCZOS)
+
+        else: # subtexture replacement
             atlas_img = self.getPilImage(atlas_name)
             st = self.resolveSubtexture(atlas_name, sub_name, atlas_img)
 
@@ -1090,10 +1091,6 @@ class TextureStudio(QMainWindow):
         """Prompt the user for an image, then add it to the replacement queue with the currently selected texture as the target."""
         if self.game.type is None:
             showError("No files loaded!")
-
-        if self.game.type == GameType.PS:
-            showError("Sorry! Replacements are not currently supported for PS4 games (BB/DES)")
-            return
         
         atlas = self.atlas_list.currentItem()
         atlas_name = atlas.data(Qt.UserRole)
@@ -1199,12 +1196,13 @@ class TextureStudio(QMainWindow):
                         f"<b>DXGI Format:</b> {c_info.dxgi_format}<br>"
                         f"<b>unk1:</b> {c_info.unk1}<br>"
                         f"<b>unk2:</b> {c_info.unk2}")
-            t_info = tpft.get_texture_format_info(tpft.format)
-            t_format = TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[tpft.format]
+            format_num = tpft.format
+            t_info = tpft.get_texture_format_info(format_num)
+            t_format = TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[format_num]
             
             expanded += (
             f"<b>Platform:</b> {tpft.platform.name}<br>"
-            f"<b>Format:</b> {t_format.name}<br>"
+            f"<b>Format:</b> {t_format.name} | {format_num}<br>"
             f"<b>Mipmap Count:</b> {tpft.mipmap_count}<br>"
             f"<b>Texture Flags:</b> {tpft.texture_flags}<br>"
             f"<b>Fourcc:</b> {t_info[0]}<br>"
@@ -1261,7 +1259,7 @@ class TextureStudio(QMainWindow):
 
         return self.getBaseImage(atlas=atlas_name)
 
-    def getBaseImage(self, atlas=None, texture=None):
+    def getBaseImage(self, atlas=None, texture=None) -> Image.Image:
         """Converts texture bytes to viewable image. If no texture is given it fetches the texture from atlas name"""
         if not texture:
             texture = self.atlases[atlas].texture

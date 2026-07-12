@@ -28,6 +28,7 @@ from soulstruct.base.textures.texconv import TexconvError, texconv
 from soulstruct.dcx import DCXType, decompress
 from soulstruct.utilities.binary import *
 from soulstruct.utilities.files import read_json, write_json
+from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -303,7 +304,7 @@ class TPFTexture:
     def write_dds(self, dds_path: str | Path):
         Path(dds_path).write_bytes(self.data)
 
-    def replace_dds(self, image_path: Path | str, dds_format: str = None, make_headerless: bool = False):
+    def replace_dds(self, image_path: Path | str, dds_format: str = None, swizzle: bool = False):
         if dds_format is None:
             dds = self.get_dds()
             dds_format = dds.texconv_format
@@ -319,18 +320,15 @@ class TPFTexture:
             if result.returncode == 0:
                 try:
                     dds_loc = Path(dds_dir, "temp.dds")
-                    if not make_headerless:
-                        self.data = dds_loc.read_bytes()
-                    elif make_headerless: # NOTE: DSTS: Not currently used, leftovers from testing BB replacement which may eventually be implemented
-                        dds = DDS.from_path(dds_loc)
+                    self.data = dds_loc.read_bytes()
 
-                        header_size = 128 
-                        if dds.dx10_header:
-                            header_size += 20  # DX10 header size
-                        
-                        with open(dds_loc, "rb") as f:
-                            f.seek(header_size)
-                            self.data = f.read()
+                    if swizzle: # DSTS system for replacing Bloodborne textures
+                        self.data = swizzle_dds_bytes_ps4(
+                            deswizzled=DDS.from_bytes(self.data).data,
+                            dxgi_format=self.console_info.dxgi_format,
+                            width=self.console_info.width,
+                            height=self.console_info.height,
+                        )
                     
                 except FileNotFoundError:
                     stdout = result.stdout.decode()
@@ -496,6 +494,9 @@ class TPFTexture:
             mipmap_count = int(math.ceil(math.log(max(width, height), 2))) + 1
         else:
             mipmap_count = self.mipmap_count
+
+        if deswizzle_platform == TPFPlatform.PS4: # Added in DSTS to prevent stream length issues due to multiple mips. Icons and ui stuff only really need 1 anyway
+            mipmap_count = 1
 
         pixelformat = DDSPixelFormat.from_fourcc_tpf_format(fourcc, self.format)
 

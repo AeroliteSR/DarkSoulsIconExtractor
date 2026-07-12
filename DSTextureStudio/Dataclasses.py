@@ -7,7 +7,8 @@ from pathlib import Path
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
-from DSTextureStudio.Helpers import replaceTerms, getLayoutPath
+from DSTextureStudio.Helpers import getLayoutPath
+from DSTextureStudio.Utilities import replaceTerms
 from DSTextureStudio.Enums import ImageType, Game
 import xml.etree.ElementTree as ET
 

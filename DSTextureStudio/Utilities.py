@@ -1,0 +1,38 @@
+def replaceTerms(text, terms: dict) -> str:
+    """Replaces all instances of substrings in a string.
+    eg. replaceTerms("file.tpf", {'.tpf': '.dcx'}) will replace any tpf file's extension to dcx"""
+    if text:
+        for term, replacement in terms.items():
+            text = text.replace(term, replacement)
+    return text
+    
+
+def path_has_sequence(parts, sequence) -> bool:
+    """Checks if any given path contains a sequence of elements.
+    eg. [\"steamapps\", \"common\", \"Sekiro\"] in potential game path."""
+    for i in range(len(parts) - len(sequence) + 1):
+        if parts[i:i+len(sequence)] == tuple(sequence):
+            return True
+    return False
+
+def morton8(i) -> tuple[int, int]:
+    """Convert a Morton (Z-order) index in an 8x8 tile to (x, y) block coordinates.
+
+    Decodes a linear Morton index (0-63) into its corresponding block coordinates inside the tile.
+
+    For example:
+        0 -> (0, 0)
+        1 -> (1, 0)
+        2 -> (0, 1)
+        3 -> (1, 1)
+        4 -> (2, 0)
+        ...
+    """
+    def compact1by1(n):
+        n &= 0x5555
+        n = (n ^ (n >> 1)) & 0x3333
+        n = (n ^ (n >> 2)) & 0x0F0F
+        n = (n ^ (n >> 4)) & 0x00FF
+        return n
+
+    return compact1by1(i), compact1by1(i >> 1)
