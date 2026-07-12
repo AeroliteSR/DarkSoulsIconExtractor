@@ -9,7 +9,6 @@ nav:
 
   - Getting Started:
     - Installation: installation.md
-    - Supported Games: supported-games.md
     - Building from source: building.md
 
   - User Guide:
@@ -19,6 +18,8 @@ nav:
     - Replacing Textures: replacing.md
     - Adding Custom Atlases/Icons: customicons.md
     - Creating a Custom File: customfiles.md
+  
+  - Supported Games: supported-games.md
 
   - Other Features: features.md
 
