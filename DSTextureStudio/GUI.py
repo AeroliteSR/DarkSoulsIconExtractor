@@ -557,7 +557,7 @@ class CompressionPrompt(QDialog):
 
         self.encoding_input = QSpinBox()
         self.encoding_input.setRange(0, 2)
-        self.encoding_input.setValue(1)
+        self.encoding_input.setValue(2)
         self.encoding_input.setToolTip("0/2 = shift_jis_2004; 1 = UTF-16")
 
         enc_layout = QHBoxLayout()
