@@ -3,7 +3,8 @@ QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, Q
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor
 from DSTextureStudio.GameInfo import Types
-from DSTextureStudio.Enums import Game, ImageType
+from DSTextureStudio.Enums import Game, ImageType, GameType
+from typing import Callable
 import re
 from pathlib import Path
 from soulstruct.dcx.core import DCXType
@@ -737,8 +738,9 @@ class ImageViewer(QGraphicsView):
         super().mouseMoveEvent(event)
 
 class TextureListWidget(QListWidget):
-    def __init__(self, parent=None, mode: ImageType = ImageType.Atlas):
+    def __init__(self, parent=None, mode: ImageType = ImageType.Atlas, check_game: Callable|None = None):
         super().__init__(parent)
+        self.checkGame = check_game
 
         self.add_button = QPushButton("+", self)
         self.add_button.setFixedSize(28, 28)
@@ -754,9 +756,6 @@ class TextureListWidget(QListWidget):
             self.menu = QMenu()
             self.def_option = QAction("Define", self)
             self.add_option = QAction("Append", self)
-            self.menu.addAction(self.def_option)
-            self.menu.addAction(self.add_option)
-
             self.add_button.clicked.connect(self.showMenu)
 
         self.repositionButton()
@@ -770,8 +769,16 @@ class TextureListWidget(QListWidget):
                 self.itemActivated.emit(item)
 
     def showMenu(self):
-        pos = self.add_button.mapToGlobal(QPoint(0, -self.menu.sizeHint().height()))
-        self.menu.popup(pos)
+        game = self.checkGame() # checkGame will never be None as showMenu is only used by subtexture_list
+        if game.type != GameType.MODERN:
+            self.add_option.trigger() # PS gametype will return append as well which skips having to select an option before it tells you that you cant
+            return
+
+        self.menu.clear()
+        self.menu.addAction(self.def_option)
+        self.menu.addAction(self.add_option)
+
+        self.menu.exec(self.add_button.mapToGlobal(QPoint(0, -self.menu.sizeHint().height())))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

@@ -85,7 +85,7 @@ class TextureStudio(QMainWindow):
         self.atlas_list.add_button.clicked.connect(self.addAtlas)
         splitter.addWidget(self.atlas_list)
 
-        self.subtexture_list = TextureListWidget(mode=ImageType.Subtexture)
+        self.subtexture_list = TextureListWidget(mode=ImageType.Subtexture, check_game=lambda: self.game)
         self.subtexture_list.setItemDelegate(Delegate(self.subtexture_list))
         self.subtexture_list.itemClicked.connect(self.showSubtexture)
         self.subtexture_list.itemActivated.connect(self.showSubtexture)
@@ -489,7 +489,7 @@ class TextureStudio(QMainWindow):
 
     def addAtlas(self):
         if self.game.type == GameType.PS:
-            showError("Sorry! Additions are not currently supported for PS games (BB/DES)")
+            showError("Sorry! Custom atlases are not supported for this game type!")
             return
         
         if self.atlas_list.count() == 0:
@@ -555,8 +555,8 @@ class TextureStudio(QMainWindow):
         self.showAtlas(self.atlas_list.currentItem())
 
     def addIcon(self, mode: IconMode = IconMode.Append):
-        if self.game.type == GameType.PS:
-            showError("Sorry! Additions are not currently supported for PS games (BB/DES)")
+        if self.game.type == GameType.PS or self.game.name == "Dark Souls 2": # no point adding a subtexture to a single icon
+            showError("Sorry! Custom subtextures are not supported for this game type!")
             return
         
         if self.atlas_list.count() == 0:
