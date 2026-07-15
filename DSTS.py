@@ -131,7 +131,7 @@ class TextureStudio(QMainWindow):
             event.accept()
             return
 
-        result = QMessageBox.question(self, "Unsaved Changes", "You have unsaved changes. Are you sure you want to exit?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        result = QMessageBox.question(self, "Active Changes", "You have active changes. Are you sure you want to exit?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if result == QMessageBox.Yes:
             event.accept()
