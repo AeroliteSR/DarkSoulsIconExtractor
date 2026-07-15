@@ -10,12 +10,14 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 3. Paste the outputted file into the directory created by Witchy
 4. Open `_witchy-bxf4.xml` in a text editor of your choice and add entries for your textures. For example:
 
- ```xml
+ ```xml  
+
  <file>  
     <flags>Flag1</flags>  
     <id>3052</id>  
     <path>MENU_Knowledge_69420.tpf.dcx</path>  
  </file>  
+  
 ```  
 The `<id>` should just be the next increment for the file. If there are 3200 files, your first new one would be 3201 etc.  
 `<path>` should obviously be the relative path to your custom file.  
