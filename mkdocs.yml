@@ -4,6 +4,9 @@ site_description: Documentation for Dark Souls Texture Studio
 theme:
   name: material
 
+markdown_extensions:
+  - fenced_code
+
 nav:
   - Home: index.md
 
