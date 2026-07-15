@@ -5,7 +5,8 @@ theme:
   name: material
 
 markdown_extensions:
-  - fenced_code
+  - pymdownx.superfences
+  - pymdownx.highlight
 
 nav:
   - Home: index.md

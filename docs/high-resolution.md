@@ -8,19 +8,19 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 1. Unpack `00_solo.tpfbdt` with [WitchyBND](https://github.com/ividyon/WitchyBND)
 2. Follow the [Creating a Custom File](customfiles.md) guide to create a compressed file. Be sure to name it `MENU_Knowledge_{id}` where `id` is the same iconId you used for the regular icon. (Use DCX_KRAK and encoding 1 on export)
 3. Paste the outputted file into the directory created by Witchy
-4. Open `_witchy-bxf4.xml` in a text editor of your choice and add entries for your textures. For example:
+4. Open `_witchy-bxf4.xml` in a text editor of your choice and add entries for each custom texture. For example:
 
- ```xml  
+    ```xml
+    <file>
+        <flags>Flag1</flags>
+        <id>3052</id>
+        <path>MENU_Knowledge_69420.tpf.dcx</path>
+    </file>
+    ```
 
-   <file>  
-      <flags>Flag1</flags>  
-      <id>3052</id>  
-      <path>MENU_Knowledge_69420.tpf.dcx</path>  
-   </file>  
-  
-```  
-The `<id>` should just be the next increment for the file. If there are 3200 files, your first new one would be 3201 etc.  
-`<path>` should obviously be the relative path to your custom file.  
+    The `<id>` should just be the next increment for the file. If there are 3200 files, your first new one would be 3201 etc.
+
+    `<path>` should obviously be the relative path to your custom file.
   
 After saving your changes, repack the unpacked directory with Witchy.   
   
