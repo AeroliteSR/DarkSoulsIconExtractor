@@ -1,14 +1,13 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
-from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint
-from PySide6.QtGui import QPalette, QPainter, QAction, QCursor
+from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
+from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap
 from DSTextureStudio.GameInfo import Types
-from DSTextureStudio.Enums import Game, ImageType, GameType
+from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
 from typing import Callable
 import re
 from pathlib import Path
 from soulstruct.dcx.core import DCXType
-import pyperclip
 import logging
 
 logger = logging.getLogger(__name__)
@@ -596,6 +595,17 @@ class ImageLabel(QLabel):
             self.viewer.showFullScreen()
 
 class ImageViewer(QGraphicsView):
+    def makeCheckerBrush(self, size=16):
+        pix = QPixmap(size * 2, size * 2)
+        pix.fill(QColor(240, 240, 240))
+
+        p = QPainter(pix)
+        p.fillRect(0, 0, size, size, QColor(200, 200, 200))
+        p.fillRect(size, size, size, size, QColor(200, 200, 200))
+        p.end()
+
+        return QBrush(pix)
+
     def __init__(self, pixmap, parent=None):
         super().__init__(parent)
 
@@ -606,20 +616,40 @@ class ImageViewer(QGraphicsView):
                             QPainter.SmoothPixmapTransform)
 
         self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setStyleSheet("background-color: black; border: none;")
-        self.zoom_level = 0
+        self.zoom_factor = 1.0
+        self.zoom_step = 1.25
+        self.min_zoom = 0.1
+        self.max_zoom = 75.0
+        self.checker_brush = self.makeCheckerBrush()
+        self.background_mode = BackgroundMode.BLACK  # 0=black, 1=white, 2=checkerboard
 
         self.scene().setSceneRect(self.pixmap_item.boundingRect().adjusted(-100, -100, 100, 100))
 
-        self.hud = QLabel("ESC / RMB to close\nR to reset\nC to copy pixel data", self)
-        self.hud.setStyleSheet("""
+        self.hud = QLabel(
+            "ESC / RMB - Close\n"
+            "R - Reset zoom/pan\n"
+            "C - Copy image\n"
+            "P - Copy pixel data\n"
+            "B - Cycle background\n"
+            "H - Toggle UI",
+            self
+        )
+
+        style = """
             QLabel {
                 color: white;
                 background-color: rgba(0, 0, 0, 120);
                 padding: 6px 10px;
                 border-radius: 6px;
                 font-size: 16px;
-            }""")
+            }"""
+
+        self.hud.setStyleSheet(style)
 
         self.hud.adjustSize()
         self.hud.move(10, 10)
@@ -627,14 +657,7 @@ class ImageViewer(QGraphicsView):
         self.hud.show()
 
         self.pixel_info = QLabel(self)
-        self.pixel_info.setStyleSheet("""
-            QLabel {
-                color: white;
-                background-color: rgba(0, 0, 0, 120);
-                padding: 6px 10px;
-                border-radius: 6px;
-                font-size: 16px;
-            }""")
+        self.pixel_info.setStyleSheet(style)
 
         self.pixel_info.show()
         self.image = pixmap.toImage()
@@ -643,11 +666,43 @@ class ImageViewer(QGraphicsView):
         self.color_preview.setFixedSize(32, 32)
         self.color_preview.setStyleSheet("border: 1px solid white;")
 
+        self.copy_popup = QLabel(self)
+        self.copy_popup.setStyleSheet(style)
+        self.copy_popup.hide()
+
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
 
-    def getColorData(self):
-        scene_pos = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
+    def drawBackground(self, painter, rect):
+        match self.background_mode:
+            case BackgroundMode.BLACK:
+                painter.fillRect(rect, Qt.black)
+            case BackgroundMode.WHITE:
+                painter.fillRect(rect, Qt.white)
+            case BackgroundMode.CHECKERED:
+                painter.fillRect(rect, self.checker_brush)
+
+    def showPopup(self, text, duration=1500):
+        self.copy_popup.setText(text)
+        self.copy_popup.adjustSize()
+
+        x = (self.width() - self.copy_popup.width()) // 2
+        y = self.height() - self.copy_popup.height() - 30
+
+        self.copy_popup.move(x, y)
+        self.copy_popup.show()
+        self.copy_popup.raise_()
+
+        QTimer.singleShot(duration, self.copy_popup.hide)
+
+    def toggleUi(self):
+        visible = not self.hud.isVisible()
+
+        self.hud.setVisible(visible)
+        self.pixel_info.setVisible(visible)
+        self.color_preview.setVisible(visible)
+
+    def getColorData(self, scene_pos):
 
         x = int(scene_pos.x())
         y = int(scene_pos.y())
@@ -656,13 +711,10 @@ class ImageViewer(QGraphicsView):
 
             color = self.image.pixelColor(x, y)
 
-            r = color.red()
-            g = color.green()
-            b = color.blue()
-            a = color.alpha()
+            r, g, b, a = color.getRgb()
 
             hex_rgba = "#{:02X}{:02X}{:02X}{:02X}".format(r, g, b, a)
-            hsv = color.getHsv()
+            h, s, v, _ = color.getHsv()
             #h, s, l, _ = color.getHsl()
             lum = int(0.2126 * r + 0.7152 * g + 0.0722 * b)
 
@@ -670,16 +722,22 @@ class ImageViewer(QGraphicsView):
                 f"X: {x}  Y: {y}\n"
                 f"RGBA: {r}, {g}, {b}, {a}\n"
                 f"HEX: {hex_rgba}\n"
-                f"HSV: {hsv[0]}, {hsv[1]}, {hsv[2]}\n"
+                f"HSV: {h}°, {s/255:.1%}, {v/255:.1%}\n"
                 #f"HSL: {h}°, {s/255*100:.1f}%, {l/255*100:.1f}%\n"
                 f"Lum: {lum} ({lum/255*100:.1f}%)"
             )
         return (0, 0, 0, 0), ""
 
     def copyData(self):
-        rgba, text = self.getColorData()
-        pyperclip.copy(text)
+        rgba, text = self.getColorData(self.mapToScene(self.mapFromGlobal(QCursor.pos())))
+        QGuiApplication.clipboard().setText(text)
         logger.info("Copied pixel data to clipboard: %s", rgba)
+        self.showPopup("Info Copied!")
+
+    def copyImage(self):
+        QGuiApplication.clipboard().setPixmap(self.pixmap_item.pixmap())
+        logger.info("Copied image to clipboard!")
+        self.showPopup("Image Copied!")
 
     def resetView(self):
         self.resetTransform()
@@ -687,24 +745,27 @@ class ImageViewer(QGraphicsView):
         self.zoom_level = 0
 
     def wheelEvent(self, event):
-        zoom_in = 1.25
-        zoom_out = 0.8
+        if event.angleDelta().y() == 0:
+            return
+
+        old_pos = self.mapToScene(event.position().toPoint())
 
         if event.angleDelta().y() > 0:
-            factor = zoom_in
-            self.zoom_level += 1
+            factor = self.zoom_step
         else:
-            factor = zoom_out
-            self.zoom_level -= 1
+            factor = 1 / self.zoom_step
 
-        if self.zoom_level < -10:
-            self.zoom_level = -10
-            return
-        if self.zoom_level > 30:
-            self.zoom_level = 30
+        new_zoom = self.zoom_factor * factor
+
+        if not (self.min_zoom <= new_zoom <= self.max_zoom):
             return
 
+        self.zoom_factor = new_zoom
         self.scale(factor, factor)
+
+        new_pos = self.mapToScene(event.position().toPoint())
+        delta = new_pos - old_pos
+        self.translate(delta.x(), delta.y())
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -714,28 +775,42 @@ class ImageViewer(QGraphicsView):
         super().mousePressEvent(event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            self.close()
-            return
-        
-        if event.key() == Qt.Key_R:
-            self.resetView()
-            return
-        
-        if event.key() == Qt.Key_C:
-            self.copyData()
-            return
+        match event.key():
+            case Qt.Key_Escape:
+                self.close()
+            case Qt.Key_R:
+                self.resetView()
+            case Qt.Key_C:
+                self.copyImage()
+            case Qt.Key_P:
+                self.copyData()
+            case Qt.Key_H:
+                self.toggleUi()
+            case Qt.Key_B:
+                self.background_mode = BackgroundMode((self.background_mode + 1) % len(BackgroundMode))
+                self.viewport().update()
+                self.showPopup(self.background_mode.name.title())
+            case _:
+                super().keyPressEvent(event)
         
     def mouseMoveEvent(self, event):
-        rgba, text = self.getColorData()
+        rgba, text = self.getColorData(self.mapToScene(event.pos()))
         self.pixel_info.setText(text)
         r, g, b, a = rgba
-        self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
+        pix = QPixmap(32, 32)
+        pix.fill(QColor(r, g, b, a))
+        self.color_preview.setPixmap(pix)
+        #self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
         self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
         self.pixel_info.adjustSize()
         self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
 
         super().mouseMoveEvent(event)
+
+    def resizeEvent(self, event):
+        self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
+        self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
+        super().resizeEvent(event)
 
 class TextureListWidget(QListWidget):
     def __init__(self, parent=None, mode: ImageType = ImageType.Atlas, check_game: Callable|None = None):

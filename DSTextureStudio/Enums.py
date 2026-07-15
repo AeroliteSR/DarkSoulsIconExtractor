@@ -1,4 +1,4 @@
-from enum import Enum, auto
+from enum import Enum, auto, IntEnum
 
 class ExportMode(Enum):
     ATLAS = auto()
@@ -57,3 +57,8 @@ class Resolution(Enum):
             Resolution.HI: "Hi",
             Resolution.LOW: "Low"
         }[self]
+
+class BackgroundMode(IntEnum):
+    BLACK = 0
+    WHITE = 1
+    CHECKERED = 2
