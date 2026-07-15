@@ -10,16 +10,16 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 3. Paste the outputted file into the directory created by Witchy
 4. Open `_witchy-bxf4.xml` in a text editor of your choice and add entries for your textures. For example:
 
- ```<file>
-    <flags>Flag1</flags>
-    <id>3052</id>
-    <path>MENU_Knowledge_69420.tpf.dcx</path>
- </file>
-```
+ ```<file>  
+    <flags>Flag1</flags>  
+    <id>3052</id>  
+    <path>MENU_Knowledge_69420.tpf.dcx</path>  
+ </file>  
+```  
 The `<id>` should just be the next increment for the file. If there are 3200 files, your first new one would be 3201 etc.  
 `<path>` should obviously be the relative path to your custom file.  
-
-5. After saving your changes, repack the unpacked directory with Witchy.  
+  
+After saving your changes, repack the unpacked directory with Witchy.   
   
 ### Pros:
 - This is the more correct way of doing things, as it's how the game stores the vanilla versions.
@@ -31,14 +31,16 @@ The `<id>` should just be the next increment for the file. If there are 3200 fil
   
   
 ## Method 2 (new):
-With `01_common` open, as with adding the regular icon, simply add a custom atlas with the "+" button, and use the hi-res texture for it.  
+With `01_common` open, as with adding the regular icon, simply add a custom atlas with the "+" button, and use the high-res texture for it.  
 As long as the name is still `MENU_Knowledge_{id}`, the game will be able to load it, regardless of it being in the "wrong" file.  
 
 ### Pros:
 - This is way more storage efficient, and takes up minimal space in your mod, making it easier to upload.
 - Your custom additions will be the only `MENU_Knowledge` files in `01_common`, making it very easy to tell what's modded.
-- Saves exponentially more time the more textures you add, as you don't have to edit Witchy's xml.
+- Saves time you would have spent editing Witchy's xml.
 
 ### Cons:
 - This is not a commonly used or known method, and as such, other people trying to look around or work on your mod may be confused.
-- If you add a LOT of textures, load times for `01_common` will increase.
+- If you add a LOT of textures, load times for `01_common` will increase.  
+  
+I would recommend the latter choice, but either works and it's up to you.

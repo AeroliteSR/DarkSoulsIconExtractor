@@ -16,9 +16,9 @@ nav:
     - Settings: settings.md
     - Exporting Textures: exporting.md
     - Replacing Textures: replacing.md
-    - Adding Custom Atlases/Icons: customicons.md
-    - Creating a Custom File: customfiles.md
-    - High Resolution Textures: hi-res.md
+    - Adding Custom Atlases/Icons: custom-icons.md
+    - Creating a Custom File: custom-files.md
+    - High Resolution Textures: high-resolution.md
   
   - Supported Games: supported-games.md
 

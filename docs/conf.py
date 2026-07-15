@@ -9,7 +9,7 @@
 project = 'Dark Souls Texture Studio'
 copyright = '2026, Aero'
 author = 'Aero'
-release = '3.6.2'
+release = '3.8.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
