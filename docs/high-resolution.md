@@ -12,11 +12,11 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 
  ```xml  
 
- <file>  
-    <flags>Flag1</flags>  
-    <id>3052</id>  
-    <path>MENU_Knowledge_69420.tpf.dcx</path>  
- </file>  
+   <file>  
+      <flags>Flag1</flags>  
+      <id>3052</id>  
+      <path>MENU_Knowledge_69420.tpf.dcx</path>  
+   </file>  
   
 ```  
 The `<id>` should just be the next increment for the file. If there are 3200 files, your first new one would be 3201 etc.  
