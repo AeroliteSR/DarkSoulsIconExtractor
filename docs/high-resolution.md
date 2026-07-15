@@ -10,7 +10,8 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 3. Paste the outputted file into the directory created by Witchy
 4. Open `_witchy-bxf4.xml` in a text editor of your choice and add entries for your textures. For example:
 
- ```<file>  
+ ```xml
+ <file>  
     <flags>Flag1</flags>  
     <id>3052</id>  
     <path>MENU_Knowledge_69420.tpf.dcx</path>  
