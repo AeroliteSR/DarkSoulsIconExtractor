@@ -1,4 +1,4 @@
-# Adding Custom Icons
+# Adding Custom Textures
 
 ## Important:
 This process is primarily for games that use layout systems, aka Sekiro, Elden Ring, Nightreign, and Armored Core 6. (though AC6 is currently not supported)
