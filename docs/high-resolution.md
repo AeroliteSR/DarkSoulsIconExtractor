@@ -44,3 +44,7 @@ As long as the name is still `MENU_Knowledge_{id}`, the game will be able to loa
 - If you add a LOT of textures, load times for `01_common` will increase.  
   
 I would recommend the latter choice, but either works and it's up to you.
+  
+
+### Acknowledgements:
+Big thanks to Kaivo on discord for bringing the latter method to my attention :)
