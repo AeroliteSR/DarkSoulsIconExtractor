@@ -83,7 +83,7 @@ You can also add your own custom atlases, though this feature is pretty experime
   
 ### Extra note about adding to DS2
 To create a custom icon for DS2, don't load any game files and then press the plus button for the atlas list. DSTS will assume you're writing a TPF file with no compression.  
-You probably want BC3_UNORM_SRGB as the format. `Apply Changes` will write plain tpf files to the output location.  
+You probably want BC3_UNORM_SRGB as the format. `Save As` will write plain tpf files to the output location.  
   
 # Credits:
 A myriad thanks to Kmstr and Managarm for their suggestions, feedback and testing throughout development! :))  

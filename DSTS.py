@@ -150,7 +150,7 @@ class TextureStudio(QMainWindow):
         self.file_menu.addAction(createAction("Open File", lambda: self.openDcxDialog(dirmode=False)))
         self.file_menu.addAction(createAction("Open Directory", lambda: self.openDcxDialog(dirmode=True)))
         self.file_menu.addSeparator()
-        self.file_menu.addAction(createAction("Apply Changes", self.applyChanges))
+        self.file_menu.addAction(createAction("Save As  ", self.applyChanges))
         dump = self.file_menu.addMenu("Dump")
         dump.addAction(createAction("Atlases", lambda: self.dumpTextures(mode=ExportMode.ATLAS)))
         dump.addAction(createAction("Subtextures", lambda: self.dumpTextures(mode=ExportMode.SUBTEXTURE)))

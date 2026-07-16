@@ -13,7 +13,7 @@
  - File:
     - Open File - Prompts for a texture file (.tpf/.tpf.dcx) to load.
     - Open Directory - Loads all aforementioned files in a given folder.
-    - Apply Changes - Initilizes writing of modified or custom files. Prompts for an output directory.
+    - Save As - Initilizes writing of modified or custom files. Prompts for an output directory.
     - Dump - Allows you to export ALL atlases or ALL subtextures (to a folder named after their parent atlas).
     - Clear - Resets the interface and unloads any files.
     - Exit - Take a guess.
