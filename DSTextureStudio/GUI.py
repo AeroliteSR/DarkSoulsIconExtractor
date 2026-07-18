@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
-from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap
+from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment
 from DSTextureStudio.GameInfo import Types
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
 from typing import Callable, Optional
@@ -47,6 +47,17 @@ class ExpandableLabel(QLabel):
                     self.collapse()
                 case False:
                     self.expand()
+            return
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+
+        copy_action = menu.addAction("Copy")
+        action = menu.exec(event.globalPos())
+
+        if action == copy_action:
+            text = QTextDocumentFragment.fromHtml(self.text()).toPlainText()
+            QGuiApplication.clipboard().setText(text)
 
     def setText(self, text: tuple[str, str]):
         """Takes a tuple of short text and full text for when expanded."""

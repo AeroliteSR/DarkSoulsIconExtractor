@@ -69,7 +69,8 @@ class TextureStudio(QMainWindow):
             new=lambda: self.pending_new_atlases,
             changes=lambda: {"replacements":self.pending_replacements, "additions":self.pending_additions, "custom":self.pending_new_atlases},
             loaded=lambda: self.LOADED_DCX_FILES,
-            layouts=lambda: self.LAYOUT_DATA
+            layouts=lambda: self.LAYOUT_DATA,
+            resolutions=lambda: self.RESOLUTIONS
         )
         self.createMenu()
 
