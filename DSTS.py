@@ -7,6 +7,7 @@ from collections import defaultdict
 from PIL import Image, UnidentifiedImageError
 from math import gcd
 from webbrowser import open_new_tab
+from typing import Optional
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
@@ -97,8 +98,7 @@ class TextureStudio(QMainWindow):
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-
-        self.preview_label = ImageLabel("Texture Preview")
+        self.preview_label = ImageLabel("Texture Preview", fetchimg=self.getPixmap)
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setStyleSheet("border: 1px solid gray; background: #222; color: white;")
         self.preview_label.setMinimumSize(600, 400)
@@ -150,7 +150,7 @@ class TextureStudio(QMainWindow):
         self.file_menu.addAction(createAction("Open File", lambda: self.openDcxDialog(dirmode=False)))
         self.file_menu.addAction(createAction("Open Directory", lambda: self.openDcxDialog(dirmode=True)))
         self.file_menu.addSeparator()
-        self.file_menu.addAction(createAction("Save As  ", self.applyChanges))
+        self.file_menu.addAction(createAction("Save As", self.applyChanges))
         dump = self.file_menu.addMenu("Dump")
         dump.addAction(createAction("Atlases", lambda: self.dumpTextures(mode=ExportMode.ATLAS)))
         dump.addAction(createAction("Subtextures", lambda: self.dumpTextures(mode=ExportMode.SUBTEXTURE)))
@@ -705,7 +705,7 @@ class TextureStudio(QMainWindow):
                         except Exception as e:
                             QMessageBox.critical(self, "Error", f"Failed to load DLL:\n{e}")
 
-    def openDcxDialog(self, file: Path|None = None, dirmode: bool = False):
+    def openDcxDialog(self, file: Optional[Path] = None, dirmode: bool = False):
         """Handles everything to do with loading files. If dirmode = True, loads every dcx/tpf in a directory."""    
         self.clear()
         self.checkOodleDLL()
@@ -916,7 +916,7 @@ class TextureStudio(QMainWindow):
         self.progress_dialog.setValue(percent)
         self.progress_dialog.setLabelText(message)
 
-    def extractionDone(self, success=True, saved_path: Path|None = None):
+    def extractionDone(self, success=True, saved_path: Optional[Path] = None):
         """Stuff to do after extraction finishes"""
         if hasattr(self, "progress_dialog"):
             self.progress_dialog.close()
@@ -1290,6 +1290,20 @@ class TextureStudio(QMainWindow):
 
         return img
 
+    def getPixmap(self, img: Optional[Image.Image] = None, resample: bool = False, crop_to: Optional[tuple] = None):
+        """Returns pixmap of current texture preview. Used to ensure proper quality with no downscaling in the Texture Viewer."""
+        if img is None:
+            atlas_name = self.atlas_list.currentItem().data(Qt.UserRole)
+            img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked()).copy()
+
+        if crop_to is not None:
+            img = img.crop(crop_to)
+
+        if resample:
+            img.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
+
+        return pil2Qpixmap(img)
+
     def isModified(self, dcx_file, atlas_name, sub_name=None):
         """Returns True if subtexture has been modified, for recoloring its entry."""
         if sub_name is None: # atlas check
@@ -1320,9 +1334,7 @@ class TextureStudio(QMainWindow):
         self.current_crop = None
 
         atlas_img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked())
-        preview_img = atlas_img.copy()
-        preview_img.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
-        self.preview_label.setPixmap(pil2Qpixmap(preview_img))
+        self.preview_label.setPixmap(self.getPixmap(atlas_img, resample=True))
 
         # Load subtextures
         self.subtexture_list.blockSignals(True)
@@ -1366,7 +1378,6 @@ class TextureStudio(QMainWindow):
         try:
             name = current.data(Qt.UserRole)
             st = self.atlases[self.current_atlas].fetch(name)
-            atlas_img = self.getPilImage(self.current_atlas)
             dcx_file = self.atlas_list.currentItem().data(Qt.UserRole+1)
             if isinstance(dcx_file, Path):
                 dcx_file = dcx_file.name
@@ -1374,12 +1385,11 @@ class TextureStudio(QMainWindow):
             self.subtexture_list.blockSignals(False)
             return
 
-        cropped = atlas_img.crop(st.box())
-        cropped.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
+        cropped_img = self.getPixmap(resample=True, crop_to=st.box())
 
-        self.preview_label.setPixmap(pil2Qpixmap(cropped))
-        self.current_crop = cropped
-        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped, st.pos, img_type=ImageType.Subtexture))
+        self.preview_label.setPixmap(cropped_img)
+        self.current_crop = cropped_img
+        self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped_img, st.pos, img_type=ImageType.Subtexture))
 
     def saveSelection(self):
         """Save current subtexture or whole atlas"""

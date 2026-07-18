@@ -4,7 +4,7 @@ from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap
 from DSTextureStudio.GameInfo import Types
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
-from typing import Callable
+from typing import Callable, Optional
 import re
 from pathlib import Path
 from soulstruct.dcx.core import DCXType
@@ -581,7 +581,8 @@ class CompressionPrompt(QDialog):
    
 
 class ImageLabel(QLabel):
-    def __init__(self, text, parent=None):
+    def __init__(self, text, fetchimg, parent=None):
+        self.fetch_img = fetchimg
         super().__init__(parent, text=text)
 
     def mouseDoubleClickEvent(self, event):
@@ -590,7 +591,7 @@ class ImageLabel(QLabel):
 
     def openView(self):
         if self.pixmap():
-            self.viewer = ImageViewer(self.pixmap())
+            self.viewer = ImageViewer(self.fetch_img())
             self.viewer.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
             self.viewer.showFullScreen()
 
@@ -813,7 +814,7 @@ class ImageViewer(QGraphicsView):
         super().resizeEvent(event)
 
 class TextureListWidget(QListWidget):
-    def __init__(self, parent=None, mode: ImageType = ImageType.Atlas, check_game: Callable|None = None):
+    def __init__(self, parent=None, mode: ImageType = ImageType.Atlas, check_game: Optional[Callable] = None):
         super().__init__(parent)
         self.checkGame = check_game
 
