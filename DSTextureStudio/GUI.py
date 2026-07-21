@@ -637,6 +637,7 @@ class ImageViewer(QGraphicsView):
         self.zoom_step = 1.25
         self.min_zoom = 0.1
         self.max_zoom = 75.0
+        self.auto_fit = True
         self.checker_brush = self.makeCheckerBrush()
         self.background_mode = BackgroundMode.BLACK  # 0=black, 1=white, 2=checkerboard
 
@@ -685,6 +686,8 @@ class ImageViewer(QGraphicsView):
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
 
+        self.resetView()
+
     def drawBackground(self, painter, rect):
         match self.background_mode:
             case BackgroundMode.BLACK:
@@ -693,6 +696,10 @@ class ImageViewer(QGraphicsView):
                 painter.fillRect(rect, Qt.white)
             case BackgroundMode.CHECKERED:
                 painter.fillRect(rect, self.checker_brush)
+
+    def updateOverlayPositions(self):
+        self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
+        self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
 
     def showPopup(self, text, duration=1500):
         self.copy_popup.setText(text)
@@ -753,31 +760,23 @@ class ImageViewer(QGraphicsView):
 
     def resetView(self):
         self.resetTransform()
-        self.centerOn(self.pixmap_item)
-        self.zoom_level = 0
+        self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+        self.zoom_factor = self.transform().m11()
+        self.auto_fit = True
 
     def wheelEvent(self, event):
+        self.auto_fit = False
         if event.angleDelta().y() == 0:
             return
 
-        old_pos = self.mapToScene(event.position().toPoint())
-
-        if event.angleDelta().y() > 0:
-            factor = self.zoom_step
-        else:
-            factor = 1 / self.zoom_step
+        factor = self.zoom_step if event.angleDelta().y() > 0 else 1 / self.zoom_step
 
         new_zoom = self.zoom_factor * factor
-
-        if not (self.min_zoom <= new_zoom <= self.max_zoom):
+        if not self.min_zoom <= new_zoom <= self.max_zoom:
             return
 
         self.zoom_factor = new_zoom
         self.scale(factor, factor)
-
-        new_pos = self.mapToScene(event.position().toPoint())
-        delta = new_pos - old_pos
-        self.translate(delta.x(), delta.y())
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -812,17 +811,21 @@ class ImageViewer(QGraphicsView):
         pix = QPixmap(32, 32)
         pix.fill(QColor(r, g, b, a))
         self.color_preview.setPixmap(pix)
-        #self.color_preview.setStyleSheet(f"background-color: rgba({r},{g},{b},{a});border: 1px solid white;")
-        self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
+        self.updateOverlayPositions()
         self.pixel_info.adjustSize()
-        self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
 
         super().mouseMoveEvent(event)
 
     def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        if self.auto_fit:
+            self.resetTransform()
+            self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+            self.zoom_factor = self.transform().m11()
+
         self.pixel_info.move(self.width() - self.pixel_info.width() - 10, 10)
         self.color_preview.move(self.pixel_info.x() - 40, self.pixel_info.y())
-        super().resizeEvent(event)
 
 class TextureListWidget(QListWidget):
     def __init__(self, parent=None, mode: ImageType = ImageType.Atlas, check_game: Optional[Callable] = None):

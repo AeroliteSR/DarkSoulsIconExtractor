@@ -1262,8 +1262,9 @@ class TextureStudio(QMainWindow):
 
     def getBaseImage(self, atlas=None, texture=None) -> Image.Image:
         """Converts texture bytes to viewable image. If no texture is given it fetches the texture from atlas name"""
-        if not texture:
+        if texture is None:
             texture = self.atlases[atlas].texture
+
         with BytesIO(texture.data) as dds_buffer:
             return Image.open(dds_buffer).convert("RGBA")
 
@@ -1294,13 +1295,21 @@ class TextureStudio(QMainWindow):
     def getPixmap(self, img: Optional[Image.Image] = None, resample: bool = False, crop_to: Optional[tuple] = None):
         """Returns pixmap of current texture preview. Used to ensure proper quality with no downscaling in the Texture Viewer."""
         if img is None:
-            atlas_name = self.atlas_list.currentItem().data(Qt.UserRole)
-            img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked()).copy()
+            sub = self.subtexture_list.currentItem()
+            if sub is not None: # subtexture
+                name = self.subtexture_list.currentItem().data(Qt.UserRole)
+                st = self.atlases[self.current_atlas].fetch(name)
+                img = self.getPilImage(self.current_atlas).crop(st.box())
+
+            else: # atlas
+                atlas_name = self.atlas_list.currentItem().data(Qt.UserRole)
+                img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked()).copy()
 
         if crop_to is not None:
             img = img.crop(crop_to)
 
         if resample:
+            img = img.copy()
             img.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
 
         return pil2Qpixmap(img)
@@ -1386,9 +1395,10 @@ class TextureStudio(QMainWindow):
             self.subtexture_list.blockSignals(False)
             return
 
-        cropped_img = self.getPixmap(resample=True, crop_to=st.box())
+        atlas_img = self.getPilImage(self.current_atlas)
+        cropped_img = atlas_img.crop(st.box())
 
-        self.preview_label.setPixmap(cropped_img)
+        self.preview_label.setPixmap(pil2Qpixmap(cropped_img))
         self.current_crop = cropped_img
         self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped_img, st.pos, img_type=ImageType.Subtexture))
 
