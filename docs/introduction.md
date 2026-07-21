@@ -3,7 +3,7 @@
 ![UI Guide](Images/Intro-UI-Guide.png)
 
 1. Atlas list - This where your atlases and textures go. Think of atlases as big images containing smaller icons that the game can crop from during play.
-2. Subtexture list - If DSTS succeeds in loading layout data, you will be able to see subtextures here. This is not a representation of any internal files, but rather DSTS crops the 'parent' atlas you have selected to a set of coordinates and dimensions. For modern games this data comes from an sblytbnd.dcx file. For older games I have defined uniform atlases in [GameInfo.py](https://github.com/dash512/DarkSoulsTextureStudio/blob/main/DSTextureStudio/GameInfo.py)
+2. Subtexture list - If DSTS succeeds in loading layout data, you will be able to see subtextures here. This is not a representation of any internal files, but rather DSTS crops the 'parent' atlas you have selected to a set of coordinates and dimensions. For modern games this data comes from an sblytbnd.dcx file. For older games I have defined uniform atlases in [defs](https://github.com/dash512/DarkSoulsTextureStudio/blob/main/DSTextureStudio/defs)
 3. Texture preview - Self explanatory. Shows a preview of the currently selected texture, where that be an atlas or one of its subtextures. TIP: double click me! (See: [Features](features.md))
 4. Texture info - A small window that displays information and data for the texture currently loaded in the preview. TIP: double click me! (See: [Features](features.md))
 5. Export button - Exports the currently loaded texture. If you have an atlas selected, you can choose to select the entire image, or all of its subtextures. Allows both png and dds output.

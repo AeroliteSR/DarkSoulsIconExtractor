@@ -1,6 +1,6 @@
 # Application Settings
 
-`Custom Names` - This setting replaces the internal names with mapped ones in `GameInfo.py`. 
+`Custom Names` - This setting replaces the internal names with mapped ones in `defs`. 
 This setting can be especially useful for if you don't know the ID of an item in a big list, allowing you to search by its display name. 
 Some data, such as Nightreign garbs and Sekiro bosses, were mapped manually, but most of it was scripted from Smithbox exports.  
 
