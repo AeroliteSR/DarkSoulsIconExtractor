@@ -8,7 +8,6 @@ import typing as tp
 from pathlib import Path
 
 from soulstruct.exceptions import SoulstructError
-#from soulstruct.utilities.files import SOULSTRUCT_PATH
 from DSTextureStudio.Utilities import getDSTSdir # <- Added in DSTS
 
 
@@ -18,7 +17,6 @@ class TexconvError(SoulstructError):
 
 
 def texconv(*args):
-    #texconv_path = SOULSTRUCT_PATH("base/textures/texconv.exe")
     texconv_path = getDSTSdir() / "texconv.exe" # <- Added in DSTS
     if not texconv_path.is_file():
         raise FileNotFoundError("Cannot find `texconv.exe` that should be bundled with Soulstruct in 'base/textures'.")

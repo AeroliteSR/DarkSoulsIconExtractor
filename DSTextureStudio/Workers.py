@@ -15,6 +15,8 @@ from PySide6.QtCore import QObject, Signal
 # Soulstruct
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
+from soulstruct.base.textures.dds import DDS
+from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, Resolution, Game, GameType
@@ -65,7 +67,7 @@ class LoadWorker(QObject):
 
         for texture in tpfdcx.textures:
             if self.game.type == GameType.PS:
-                logger.info("PS format detected. Creating headerized dds for TPFTexture: %s", texture.stem)
+                logger.debug("PS format detected. Creating headerized dds for TPFTexture: %s", texture.stem)
                 match self.game.name:
                     case "Bloodborne":
                         platform = TPFPlatform.PS4
@@ -464,7 +466,20 @@ class WriteWorker(QObject):
                 base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
 
                 if data["new_atlases"]:
-                    base.textures.extend([t.texture for t in data["new_atlases"]])
+                    if self.game.name == "Bloodborne":
+                        for t in data["new_atlases"]:
+                            texture: TPFTexture = t.texture
+                            dds = DDS.from_bytes(texture.get_headerized_data(TPFPlatform.PC)) # dont deswizzle as image is already not swizzled
+                            swizzled = swizzle_dds_bytes_ps4(
+                                deswizzled=dds.data,
+                                dxgi_format=texture.console_info.dxgi_format,
+                                width=texture.console_info.width,
+                                height=texture.console_info.height,
+                            )
+                            texture.data = swizzled
+                            base.textures.append(texture)
+                    else:         
+                        base.textures.extend([t.texture for t in data["new_atlases"]])
 
                 atlas_cache = {}
 
@@ -474,8 +489,8 @@ class WriteWorker(QObject):
                     atlas_img = atlas_cache[atlas_name]
 
                     for add in ops["additions"]:
-                            if add.img:
-                                add.paste_into(atlas_img)
+                        if add.img:
+                            add.paste_into(atlas_img)
 
                     for sub_name, new_img in ops["replacements"].items():
                         if sub_name != "*Self*":  # subtexture replacement
@@ -493,7 +508,11 @@ class WriteWorker(QObject):
                         atlas_img.save(temp_path)
                     try:
                         texture = TPF.find_texture_stem(base, atlas_name)
-                        texture.replace_dds(temp_path, dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name, swizzle=(self.game.name == "Bloodborne"))
+                        texture.replace_dds(temp_path,
+                                            dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name,
+                                            swizzle=(self.game.name == "Bloodborne"),
+                                            dimensions=atlas_img.size,
+                        )
                     finally:
                         if os.path.exists(temp_path):
                             os.remove(temp_path)

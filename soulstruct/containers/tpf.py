@@ -304,7 +304,7 @@ class TPFTexture:
     def write_dds(self, dds_path: str | Path):
         Path(dds_path).write_bytes(self.data)
 
-    def replace_dds(self, image_path: Path | str, dds_format: str = None, swizzle: bool = False):
+    def replace_dds(self, image_path: Path | str, dds_format: str = None, swizzle: bool = False, dimensions: tp.Optional[tuple] = None):
         if dds_format is None:
             dds = self.get_dds()
             dds_format = dds.texconv_format
@@ -320,15 +320,22 @@ class TPFTexture:
             if result.returncode == 0:
                 try:
                     dds_loc = Path(dds_dir, "temp.dds")
-                    self.data = dds_loc.read_bytes()
+
+                    if dimensions is not None:
+                        #dds.header.width, dds.header.height = dimensions 
+                        self.console_info.width, self.console_info.height = dimensions # overwrite/ensure
 
                     if swizzle: # DSTS system for replacing Bloodborne textures
+                        dds = DDS.from_bytes(dds_loc.read_bytes())
+                        assert (dds.header.width, dds.header.height) == dimensions
                         self.data = swizzle_dds_bytes_ps4(
-                            deswizzled=DDS.from_bytes(self.data).data,
+                            deswizzled=dds.data,
                             dxgi_format=self.console_info.dxgi_format,
                             width=self.console_info.width,
                             height=self.console_info.height,
                         )
+                    else:
+                        self.data = dds_loc.read_bytes()
                     
                 except FileNotFoundError:
                     stdout = result.stdout.decode()

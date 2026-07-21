@@ -367,7 +367,7 @@ class TextureNamePrompt(QDialog):
             if self.padprompt:
                 self.padding_label = QLabel("Padding:")
                 self.padding_input = QSpinBox()
-                self.padding_input.setRange(1, 512)
+                self.padding_input.setRange(0, 512)
                 self.padding_input.setValue(2)
 
                 self.layout.addWidget(self.padding_label)
@@ -478,7 +478,7 @@ class TextureNamePrompt(QDialog):
         return self.name_input.text(), fmt, coords
         
 class DefineSubtexturePrompt(QDialog):
-    def __init__(self):
+    def __init__(self, maxwidth, maxheight):
         super().__init__()
         self.setWindowTitle("Prompt")
 
@@ -498,7 +498,7 @@ class DefineSubtexturePrompt(QDialog):
 
         size_layout.addWidget(QLabel("Width:"))
         self.width_input = QSpinBox()
-        self.width_input.setRange(1, 8192)
+        self.width_input.setRange(1, maxwidth)
         self.width_input.setValue(128)
         size_layout.addWidget(self.width_input)
 
@@ -506,7 +506,7 @@ class DefineSubtexturePrompt(QDialog):
 
         size_layout.addWidget(QLabel("Height:"))
         self.height_input = QSpinBox()
-        self.height_input.setRange(1, 8192)
+        self.height_input.setRange(1, maxheight)
         self.height_input.setValue(128)
         size_layout.addWidget(self.height_input)
 

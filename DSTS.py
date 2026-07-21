@@ -8,6 +8,7 @@ from PIL import Image, UnidentifiedImageError
 from math import gcd
 from webbrowser import open_new_tab
 from typing import Optional
+from tempfile import NamedTemporaryFile
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
@@ -17,6 +18,7 @@ from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
+from soulstruct.base.textures.dds.core import DDS
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
@@ -27,7 +29,7 @@ from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWind
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
-from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir
+from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir, checkBlockSize, padImage, tupleAdd, align_up
 
 BLANK_PATH = Path('.')
 
@@ -489,10 +491,6 @@ class TextureStudio(QMainWindow):
         self.showAtlas(atlas_item)
 
     def addAtlas(self):
-        if self.game.type == GameType.PS:
-            showError("Sorry! Custom atlases are not supported for this game type!")
-            return
-        
         if self.atlas_list.count() == 0:
             answer = showQuery("Creation", "You currently have no loaded files.\nWould you like to create a custom TPF?")
             if answer != QMessageBox.Yes:
@@ -532,7 +530,52 @@ class TextureStudio(QMainWindow):
             showError("A texture of this name already exists!")
             return
 
-        blank = TPFTexture(stem=name, format=DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
+        match self.game.name:
+            case 'Bloodborne':
+                img = Image.open(img_path)
+                w,h = img.size
+
+                if not checkBlockSize((w,h)):
+                    query = showQuery("Warning", "Swizzled textures should have dimensions divisible by 8.\nWould you like to pad this texture?")
+                    if query == QMessageBox.Cancel:
+                        logger.warning("Returned on non-valid texture dimensions. User selected Cancel when prompted to pad image.")
+                        return
+                    elif query == QMessageBox.Yes:
+                        required_w = align_up(w) - w
+                        required_h = align_up(h) - h
+                        img = padImage(img, (required_w, required_h))
+                        w, h = img.size
+                        logger.warning("Padded image to dimensions: %s", img.size)
+                        with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                            img_path = tmp.name
+                            img.save(tmp.name)
+
+                platform = TPFPlatform.PS4
+                consoleinfo = TPFTexture.ConsoleInfo(
+                    width=w,
+                    height=h,
+                    texture_count=1,
+                    unk2=13,
+                    dxgi_format=DXGI_FORMAT[_format]
+                )
+            
+            case "Demon's Souls":
+                img = Image.open(img_path)
+                w,h = img.size
+                platform = TPFPlatform.PC
+                consoleinfo = TPFTexture.ConsoleInfo(
+                    width=w,
+                    height=h,
+                    texture_count=1,
+                    unk2=13,
+                    dxgi_format=DXGI_FORMAT[_format]
+                )
+
+            case _:
+                platform = TPFPlatform.PC
+                consoleinfo = None
+
+        blank = TPFTexture(stem=name, mipmap_count=1, format=DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=platform, console_info=consoleinfo)
         blank.replace_dds(img_path, dds_format=_format)
         new_atlas = Atlas(
             name=name,
@@ -556,8 +599,8 @@ class TextureStudio(QMainWindow):
         self.showAtlas(self.atlas_list.currentItem())
 
     def addIcon(self, mode: IconMode = IconMode.Append):
-        if self.game.type == GameType.PS or self.game.name == "Dark Souls 2": # no point adding a subtexture to a single icon
-            showError("Sorry! Custom subtextures are not supported for this game type!")
+        if self.game.name == "Dark Souls 2": # no point adding a subtexture to a single icon
+            showError("If you're trying to add icons for DS2, see:\n<a href='https://darksoulstexturestudio.readthedocs.io/en/latest/custom-files/'>Docs</a>", _type=QMessageBox.information)
             return
         
         if self.atlas_list.count() == 0:
@@ -573,6 +616,9 @@ class TextureStudio(QMainWindow):
         dcx_file = atlas_item.data(Qt.UserRole+1)
         atlas_obj = self.atlases.get(atlas_name)
         subs = atlas_obj.subtextures
+
+        if self.game.name == "Bloodborne" and len(subs) == 0:
+            showError("Sorry, you can't modify custom BB atlases right now.")
         
         if atlas_obj.parent == "None":
             showError("This file has no layout.")
@@ -586,7 +632,7 @@ class TextureStudio(QMainWindow):
 
                 name, padding, resize, half = dialog.get_result()
 
-                if name in subs:
+                if any(name==i.name for i in subs):
                     showError("An icon of this name already exists!")
                     return
         
@@ -604,6 +650,19 @@ class TextureStudio(QMainWindow):
 
                 atlas_img = self.getPilImage(atlas_name)
 
+                new_dims = tupleAdd([atlas_img.size, img.size, (padding, padding)])
+                if self.game.name == "Bloodborne" and not checkBlockSize(new_dims): # dimensions are not divisible by 4
+                    query = showQuery("Warning", "Swizzled textures should have dimensions divisible by 8.\nWould you like to pad this texture?")
+                    if query == QMessageBox.Cancel:
+                        logger.warning("Returned on non-valid texture dimensions. User selected Cancel when prompted to pad image.")
+                        return
+                    elif query == QMessageBox.Yes:
+                        required_w = align_up(new_dims[0]) - new_dims[0]
+                        required_h = align_up(new_dims[1]) - new_dims[1]
+                        img = padImage(img, (required_w, required_h))
+                        w, h = img.size
+                        logger.warning("Padded image to dimensions: %s", img.size)
+
                 used_rects = [st.box(padding=padding) for st in subs]
                 pos = getFreeSpace(atlas_img.size, used_rects, w, h, padding=padding)
 
@@ -614,13 +673,13 @@ class TextureStudio(QMainWindow):
                     y = atlas_img.size[1] + padding
                 
             case IconMode.Define:
-                dialog = DefineSubtexturePrompt()
+                dialog = DefineSubtexturePrompt(*atlas_img.size)
                 if not dialog.exec():
                     return
 
                 name, hw, xy, half = dialog.get_result()
 
-                if name in subs:
+                if any(name==i.name for i in subs):
                     showError("An icon of this name already exists!")
                     return
                 
@@ -1264,8 +1323,12 @@ class TextureStudio(QMainWindow):
     def getBaseImage(self, atlas=None, texture=None) -> Image.Image:
         """Converts texture bytes to viewable image. If no texture is given it fetches the texture from atlas name"""
         if texture is None:
-            texture = self.atlases[atlas].texture
+            texture: TPFTexture = self.atlases[atlas].texture
 
+        if self.game.name == "Bloodborne":
+            dds = texture.get_headerized_data(TPFPlatform.PC) # existing ones return due to being a valid DDS, custom are not swizzled; PC skips deswizzling
+            return Image.open(BytesIO(dds)).convert("RGBA")
+        
         with BytesIO(texture.data) as dds_buffer:
             return Image.open(dds_buffer).convert("RGBA")
 
