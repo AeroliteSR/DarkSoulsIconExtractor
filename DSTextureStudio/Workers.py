@@ -16,12 +16,11 @@ from PySide6.QtCore import QObject, Signal
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
 # Custom
-from DSTextureStudio.GameInfo import Maps
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, Resolution, Game, GameType
 from DSTextureStudio.Helpers import createDebugGrid, getLayoutData
 from DSTextureStudio.log_utils import format_exc_clean
-from DSTextureStudio.Utilities import replaceTerms
+from DSTextureStudio.Utilities import replaceTerms, loadJson
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +184,8 @@ class LoadWorker(QObject):
                 dds = texture.get_dds()
                 image = Image.open(BytesIO(dds.to_bytes())).convert("RGBA")
 
-                texmap = Maps.TextureDimensions[self.game.name]
-                dimensions = texmap.get(name, None)
+                dimensions = loadJson("Dimensions").get(self.game.name, {}).get(name, None)
+                
                 if dimensions:
                     tile_width, tile_height = dimensions['width'], dimensions['height']
 

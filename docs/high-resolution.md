@@ -25,6 +25,7 @@ There are two ways to accomplish this: the vanilla and "correct" way, and the ea
 After saving your changes, repack the unpacked directory with Witchy.   
   
 ### Pros:
+- The 00_solo archives are lazy loaded, meaning textures are only fetched when needed and don't take up additional memory.
 - This is the more correct way of doing things, as it's how the game stores the vanilla versions.
   
 ### Cons:
@@ -43,11 +44,13 @@ As long as the name is still `MENU_Knowledge_{id}`, the game will be able to loa
 - Saves time you would have spent editing Witchy's xml.
 
 ### Cons:
+- Common textures are always loaded in RAM, and will thus bloat up the game. <- IMPORTANT!
 - This is not a commonly used or known method, and as such, other people trying to look around or work on your mod may be confused.
 - If you add a LOT of textures, load times for `01_common` will increase.  
   
-I would recommend the latter choice, but either works and it's up to you.
+### Which to choose?
+If you're only adding a few icons, Method 2 is probably fine and will only add a few megabytes to memory consumption.  
+If you're making an expansive mod with many items, or if you are on a low end PC, use Method 1.
   
-
 ### Acknowledgements:
 Big thanks to Kaivo on discord for bringing the latter method to my attention :)

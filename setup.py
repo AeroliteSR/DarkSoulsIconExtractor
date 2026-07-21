@@ -3,7 +3,8 @@ import sys
 
 include_files = [
     ("icon.ico", "icon.ico"),
-    ("soulstruct/base/textures/texconv.exe", "soulstruct/base/textures/texconv.exe"),
+    ("defs", "defs"),
+    ("soulstruct/base/textures/texconv.exe", "texconv.exe"),
     ("README.md", "README.md"),
     ("LICENSE", "LICENSE")
 ]
@@ -22,7 +23,7 @@ if sys.platform == "win32":
 
 setup(
     name="DSTS",
-    version="3.8.3",
+    version="3.8.4",
     description="Dark Souls Texture Studio",
     options={"build_exe": build_exe_options},
     executables=[Executable("DSTS.py", base=base, icon="icon.ico")],

@@ -1,0 +1,14 @@
+These defs contain certain information that DSTS uses that you are free to edit.
+
+Atlas_Names.json - Contains maps of internal Atlas/Texture names to Community names (written by me). Example:
+"Game Name": {"Internal": "Example"}
+
+Subtexture_Names.json - Same as above but for Subtexture icons based on ids scripted from Smithbox. Example.
+"Game Name": {"icon prefix": {"icon id": "item name"}}
+icon id is cut within DSTS by splitting by underscore. For example, "MENU_ItemIcon_0123" is split into ["ItemIcon", 0123]. The first argument is used as the prefix,
+and the second as the id. For example it will then fetch the name from {"Elden Ring": {"ItemIcon": {0123: "hello world"}}} and return "hello world"
+
+Dimensions.json - Contains standard icon sizes for Atlases in games that don't use shoebox layouts. Example:
+"Game Name": {"Atlas Name": {"width": 69, "height": 420}}
+
+Feel free to edit or add to any of these files. If you feel your changes should be included, make a PR or contact me and I'll add them to DSTS by default.

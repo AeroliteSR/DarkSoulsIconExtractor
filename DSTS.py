@@ -18,7 +18,7 @@ from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
-from DSTextureStudio.GameInfo import Maps, Types
+from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
@@ -27,7 +27,7 @@ from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWind
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
-from DSTextureStudio.Utilities import replaceTerms, path_has_sequence
+from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir
 
 BLANK_PATH = Path('.')
 
@@ -532,7 +532,7 @@ class TextureStudio(QMainWindow):
             showError("A texture of this name already exists!")
             return
 
-        blank = TPFTexture(stem=name, format=Types.DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
+        blank = TPFTexture(stem=name, format=DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=TPFPlatform.PC) # idk smth with format= if PS games are every supported
         blank.replace_dds(img_path, dds_format=_format)
         new_atlas = Atlas(
             name=name,
@@ -947,13 +947,15 @@ class TextureStudio(QMainWindow):
                 item.setText(item.data(Qt.UserRole))
 
         if self.btn_useCustomNames.isChecked():
+            ATLASNAMES = loadJson("Atlas_Names")
+            SUBNAMES = loadJson("Subtexture_Names")
             for idx in range(self.atlas_list.count()):
                 item = self.atlas_list.item(idx)
                 text = item.text()
                 if self.game.name == 'Dark Souls 2': # special handling due to weird naming system
                     text = text[text.rfind('_')+1:]
 
-                name = Maps.AtlasNames[self.game.name].get(text, None) or item.text()
+                name = ATLASNAMES.get(self.game.name, {}).get(text, None) or item.text()
                 item.setText(name)
             
             for idx in range(self.subtexture_list.count()):
@@ -964,7 +966,7 @@ class TextureStudio(QMainWindow):
                 try:
                     id = pieces[-1]
                     _type = pieces[0]
-                    name = Maps.TextureNames[self.game.name].get(_type, {}).get(id.lstrip('0'), None) or text
+                    name = SUBNAMES.get(self.game.name, {}).get(_type, {}).get(id.lstrip('0'), None) or text
                 except IndexError:
                     name = text
 
@@ -1024,8 +1026,7 @@ class TextureStudio(QMainWindow):
         if st:
             return st
 
-        texmap = Maps.TextureDimensions[self.game.name]
-        dimensions = texmap.get(atlas_name)
+        dimensions = loadJson("Dimensions").get(self.game.name, {}).get(atlas_name)
 
         if not dimensions:
             return None
@@ -1461,19 +1462,13 @@ class TextureStudio(QMainWindow):
 
         self.runExtraction(mode=mode, gridOverlay=gridOverlay)
 
-def getIcon(base_path):
-    if getattr(sys, 'frozen', False):
-        return QIcon(str(Path(sys.executable).parent / 'icon.ico'))
-    else:
-        return QIcon(str(base_path / 'icon.ico'))
-
 def main():
     app = QApplication(sys.argv)
-    base_path = Path(sys.argv[0]).parent
+    base_dir = getDSTSdir()
     app.setStyle("Fusion")
     app.setStyleSheet(Palettes.DARK_STYLESHEET)
-    app.setWindowIcon(getIcon(base_path))
-    window = TextureStudio(project_dir=base_path)
+    app.setWindowIcon(QIcon(str(base_dir / "icon.ico")))
+    window = TextureStudio(project_dir=base_dir)
     window.show()
 
     addQtHandler(logger, window.logSignal, log_emitter)

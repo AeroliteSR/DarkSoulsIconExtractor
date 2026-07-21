@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
 from DSTextureStudio.Enums import Game
 from DSTextureStudio.GUI import gameTypeDialog
-from DSTextureStudio.GameInfo import Types
+from DSTextureStudio.GameInfo import LAYOUT_PATHS
 from DSTextureStudio.Utilities import path_has_sequence
 from soulstruct.dcx import core
 import tempfile
@@ -127,4 +127,4 @@ def getLayoutPath(game, **kwargs):
     format_mode - what resolution the file is for. generally hi/low
     
     layout_name - name of the .layout file"""
-    return Types.LAYOUT_PATHS[game].format(**kwargs)
+    return LAYOUT_PATHS[game].format(**kwargs)

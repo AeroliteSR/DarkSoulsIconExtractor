@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment
-from DSTextureStudio.GameInfo import Types
+from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP, SubtexturePrefix
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
 from typing import Callable, Optional
 import re
@@ -356,7 +356,7 @@ class TextureNamePrompt(QDialog):
         if self.mode == ImageType.Subtexture:
             self.layout.addWidget(QLabel("Prefix:"))
             self.prefix_input = QComboBox()
-            self.prefix_input.addItems(Types.SubtexturePrefix)
+            self.prefix_input.addItems(SubtexturePrefix)
             self.prefix_input.setEditable(True)
             self.layout.addWidget(self.prefix_input)
 
@@ -408,7 +408,7 @@ class TextureNamePrompt(QDialog):
             if self.formatprompt:
                 self.layout.addWidget(QLabel("Format:"))
                 self.format_input = QComboBox()
-                self.format_input.addItems([i.name for i in Types.DXGI_STRUCT_MAP.keys()])
+                self.format_input.addItems([i.name for i in DXGI_STRUCT_MAP.keys()])
                 self.layout.addWidget(self.format_input)
             
             if self.blankprompt:
@@ -486,7 +486,7 @@ class DefineSubtexturePrompt(QDialog):
 
         self.layout.addWidget(QLabel("Prefix:"))
         self.prefix_input = QComboBox()
-        self.prefix_input.addItems(Types.SubtexturePrefix)
+        self.prefix_input.addItems(SubtexturePrefix)
         self.prefix_input.setEditable(True)
         self.layout.addWidget(self.prefix_input)
 

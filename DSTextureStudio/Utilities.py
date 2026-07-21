@@ -1,3 +1,7 @@
+import json
+import sys
+from pathlib import Path
+
 def replaceTerms(text, terms: dict) -> str:
     """Replaces all instances of substrings in a string.
     eg. replaceTerms("file.tpf", {'.tpf': '.dcx'}) will replace any tpf file's extension to dcx"""
@@ -36,3 +40,14 @@ def morton8(i) -> tuple[int, int]:
         return n
 
     return compact1by1(i), compact1by1(i >> 1)
+
+def getDSTSdir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    else:
+        return Path(__file__).resolve().parents[1] # extra step up due to Utils being in a subdir
+
+def loadJson(name: str, dir: str = "defs"):
+    with open(getDSTSdir() / dir / f"{name}.json", 'r') as file:
+        return json.load(file)
+
