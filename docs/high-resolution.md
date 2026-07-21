@@ -29,7 +29,7 @@ After saving your changes, repack the unpacked directory with Witchy.
 - This is the more correct way of doing things, as it's how the game stores the vanilla versions.
   
 ### Cons:
-- If you redistribute your mod, such as publishing it on Nexusmods, you have to include the ENTIRE `00_solo` file, which is 500mb.
+- If you redistribute your mod, such as publishing it on Nexusmods, you have to include the ENTIRE `00_solo` file, which can be *very* large.
 - It's harder to find your additions at a later date.
 - Repack times are longer and more temporary storage is required.
   
@@ -53,4 +53,4 @@ If you're only adding a few icons, Method 2 is probably fine and will only add a
 If you're making an expansive mod with many items, or if you are on a low end PC, use Method 1.
   
 ### Acknowledgements:
-Big thanks to Kaivo on discord for bringing the latter method to my attention :)
+Big thanks to Kaivo on discord for bringing the latter method to my attention as well as Ivi for clarifying on how they differ in terms of memory usage :)
