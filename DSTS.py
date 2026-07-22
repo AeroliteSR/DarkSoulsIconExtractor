@@ -21,7 +21,7 @@ from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
-from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
+from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified
 from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,

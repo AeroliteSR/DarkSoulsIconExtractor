@@ -42,14 +42,4 @@ __all__ = [
 ]
 
 from constrata import *
-from constrata.metadata import BinaryArrayMetadata
 
-if not BinaryStruct.METADATA_FACTORIES:
-    from soulstruct.utilities.maths import Vector2, Vector3, Vector4
-
-    # `Vector.__iter__` allows automatic pack support.
-    BinaryStruct.METADATA_FACTORIES = {
-        "Vector2": lambda: BinaryArrayMetadata(2, "2f", unpack_func=Vector2),
-        "Vector3": lambda: BinaryArrayMetadata(3, "3f", unpack_func=Vector3),
-        "Vector4": lambda: BinaryArrayMetadata(4, "4f", unpack_func=Vector4),
-    }

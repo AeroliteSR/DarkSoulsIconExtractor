@@ -1,5 +1,4 @@
 from PIL import Image, ImageDraw
-import numpy as np
 from io import BytesIO
 from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
@@ -48,10 +47,17 @@ def getFreeSpace(atlas_size, used_rects, w, h, step=4, padding=2):
 
 def cleanByAlpha(img: Image.Image, threshold: int = 5) -> Image.Image:
     """Zero RGB values where alpha <= threshold."""
-    arr = np.array(img)
-    mask = arr[..., 3] <= threshold
-    arr[mask, :3] = 0
-    return Image.fromarray(arr, "RGBA")
+    img = img.convert("RGBA")
+
+    alpha = img.getchannel("A")
+    mask = alpha.point(lambda a: 255 if a <= threshold else 0)
+    black = Image.new("RGB", img.size, (0, 0, 0))
+
+    rgb = img.convert("RGB")
+    rgb.paste(black, mask)
+
+    return Image.merge("RGBA", (*rgb.split(), alpha))
+
 
 def parseGameType(path) -> Game:
     game_type = None

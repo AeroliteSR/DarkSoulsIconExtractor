@@ -2,7 +2,6 @@ from __future__ import annotations
 import logging
 # Basic Modules
 import os
-import numpy as np
 from io import BytesIO
 from copy import deepcopy
 from tempfile import NamedTemporaryFile
@@ -204,8 +203,9 @@ class LoadWorker(QObject):
                         y = row * tile_height
 
                         tile = image.crop((x, y, x + tile_width, y + tile_height))
-                        alpha = np.array(tile.getchannel("A"))
-                        opacity_ratio = np.count_nonzero(alpha) / alpha.size
+                        alpha = tile.getchannel("A")
+                        opacity_ratio = sum(1 for p in alpha.getdata() if p) / (alpha.width * alpha.height)
+
                         isBlank: bool = opacity_ratio < 0.01
 
                         atlases[name].add(SubTexture(name=str(idx),
