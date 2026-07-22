@@ -591,7 +591,7 @@ class TextureStudio(QMainWindow):
 
     def addIcon(self, mode: IconMode = IconMode.Append):
         if self.game.name == "Dark Souls 2": # no point adding a subtexture to a single icon
-            showError("If you're trying to add icons for DS2, see:\n<a href='https://darksoulstexturestudio.readthedocs.io/en/latest/custom-files/'>Docs</a>", _type=QMessageBox.information)
+            showError("If you're trying to add icons for DS2, see:<br><a href='https://darksoulstexturestudio.readthedocs.io/en/latest/custom-files/'>Docs</a>", _type=QMessageBox.Information)
             return
         
         if self.atlas_list.count() == 0:
@@ -609,7 +609,7 @@ class TextureStudio(QMainWindow):
         subs = atlas_obj.subtextures
 
         if len(subs) == 0:
-            showError("Sorry, this atlas isn't mapped yet!\nConsider mapping them yourself in Dimensions.json :D")
+            showError("Sorry, this atlas isn't mapped yet!<br>Consider mapping them yourself in Dimensions.json :D")
             return
         
         if atlas_obj.parent == "None":
@@ -1152,7 +1152,7 @@ class TextureStudio(QMainWindow):
         atlas_obj = self.atlases.get(atlas_name)
 
         if atlas_obj.parent == "None":
-            showError("Custom files cannot be replaced.\nTry deleting it and making a new one with the image you want.")
+            showError("Custom files cannot be replaced.<br>Try deleting it and making a new one with the image you want.")
 
         if not atlas:
             showError('No atlas loaded!')

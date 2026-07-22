@@ -930,7 +930,8 @@ def showError(text, title="Error", _type=QMessageBox.Critical):
     """Error popup with specified text"""
     msg = QMessageBox()
     msg.setIcon(_type)
-    msg.setWindowTitle(title) 
+    msg.setWindowTitle(title)
+    msg.setTextFormat(Qt.RichText)
     msg.setText(text) 
     msg.exec()
 

@@ -2,9 +2,14 @@ import shlex
 import re
 import logging
 from pprint import pformat
+from pathlib import Path
+from copy import deepcopy
 from DSTextureStudio.Dataclasses import Command
 from DSTextureStudio.log_utils import format_exc_clean, formatter
-from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QCompleter, QVBoxLayout, QWidget
+from soulstruct.containers.tpf import TPFPlatform
+from soulstruct.base.textures.dds import DDS
+from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
+from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QCompleter, QVBoxLayout, QWidget, QFileDialog
 from PySide6.QtCore import Qt
 
 class ConsoleWindow(QWidget):
@@ -21,6 +26,7 @@ class ConsoleWindow(QWidget):
             "repr": Command(self.cmd_repr, "Calls __repr__() for an object"),
             "len": Command(self.cmd_len, "Prints length/amount of items in an iterable"),
             "verbose": Command(self.cmd_verbose, "Toggles verbosity, showing DEBUG level logs to console"),
+            "xp_swl": Command(self.cmd_export_swizzled, "Exports a swizzled version of the currently selected PS4 texture for debug"),
             "python": Command(self.cmd_dbg, "Toggles debug mode, allowing code execution. Only do this if you know what you're doing."),
         }
 
@@ -47,6 +53,7 @@ class ConsoleWindow(QWidget):
             "repr",
             "len",
             "verbose",
+            "xp_swl",
             "python"
         ])
         self.command.setCompleter(completer)
@@ -173,6 +180,28 @@ class ConsoleWindow(QWidget):
 
         except Exception:
             self.println(format_exc_clean())
+
+    def cmd_export_swizzled(self, arg=None):
+        game = self.objects["game"]().name
+        if game != 'Bloodborne':
+            self.println("Selection is not a valid PS4 texture")
+            return
+        name = self.objects["current"]()
+        atlas = self.objects['atlases']()[name]
+        tex = deepcopy(atlas.texture)
+
+        output = Path(QFileDialog.getSaveFileName(self, "Save To", "debug.dds", "DDS Files (*.dds)")[0])
+        if output and output != Path('.'):
+            dds = DDS.from_bytes(tex.get_headerized_data(TPFPlatform.PC))
+            data = swizzle_dds_bytes_ps4(
+                deswizzled=dds.data,
+                dxgi_format=tex.console_info.dxgi_format,
+                width=tex.console_info.width,
+                height=tex.console_info.height,
+            )   
+            swizzled_dds = DDS(header=dds.header, dx10_header=dds.dx10_header, data=data)  
+            swizzled_dds.write(output)
+            self.println(f"Wrote swizzled and headerized DDS to:\n{output}")
 
     def cmd_help(self, arg=None):
         self.println("Available commands:")
