@@ -6,11 +6,11 @@ For more information, please visit the [Documentation](https://darksoulstextures
 ## Supports:
 | Game       | Preview | Export | Replace | Add |
 |------------|---------|--------|---------|-----|
-| DeS        |   ✅    |  ✅    |   ✅    | ❌  |
+| DeS        |   ✅    |  ✅    |   ✅    | ✅  |
 | DS1        |   ✅    |  ✅    |   ✅    | ✅  |
 | DS2        |   ✅    |  ✅    |   ✅    | ✅  |
 | DS3        |   ✅    |  ✅    |   ✅    | ✅  |
-| BB         |   ✅    |  ✅    |   ✅    | ❌  |
+| BB         |   ✅    |  ✅    |   ✅    | ✅  |
 | SDT        |   ✅    |  ✅    |   ✅    | ✅  |
 | AC6        |   ✅    |  ✅    |   ✅    | ✅  |
 | ER         |   ✅    |  ✅    |   ✅    | ✅  |

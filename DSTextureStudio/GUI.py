@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox,
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox, QButtonGroup, QRadioButton,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment
@@ -590,6 +590,54 @@ class CompressionPrompt(QDialog):
     def get_result(self):
         return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
    
+class InvalidImagePrompt(QDialog):
+    CANCEL = 0
+    IGNORE = 1
+    RESIZE = 2
+    PAD = 3
+    NEW = 4
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Invalid Texture")
+
+        layout = QVBoxLayout(self)
+
+        self.group = QButtonGroup(self)
+
+        info = QLabel("Swizzled textures should have dimensions divisible by 8.\nWhat would you like to do with this texture?")
+
+        cancel = QRadioButton("Cancel Addition")
+        ignore = QRadioButton("Ignore Warning")
+        resize = QRadioButton("Resize Image")
+        pad = QRadioButton("Pad Image With Alpha")
+        new = QRadioButton("Choose A New Image")
+
+        self.group.addButton(cancel, self.CANCEL)
+        self.group.addButton(ignore, self.IGNORE)
+        self.group.addButton(resize, self.RESIZE)
+        self.group.addButton(pad, self.PAD)
+        self.group.addButton(new, self.NEW)
+
+        cancel.setChecked(True)
+
+        layout.addWidget(info)
+        layout.addWidget(cancel)
+        layout.addWidget(ignore)
+        layout.addWidget(resize)
+        layout.addWidget(pad)
+        layout.addWidget(new)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout.addWidget(buttons)
+
+    def selected(self):
+        return self.group.checkedId()
+
 
 class ImageLabel(QLabel):
     def __init__(self, text, fetchimg, parent=None):

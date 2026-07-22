@@ -321,8 +321,7 @@ class TPFTexture:
                 try:
                     dds_loc = Path(dds_dir, "temp.dds")
 
-                    if dimensions is not None:
-                        #dds.header.width, dds.header.height = dimensions 
+                    if dimensions is not None and self.console_info is not None:
                         self.console_info.width, self.console_info.height = dimensions # overwrite/ensure
 
                     if swizzle: # DSTS system for replacing Bloodborne textures

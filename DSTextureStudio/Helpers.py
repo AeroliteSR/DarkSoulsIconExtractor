@@ -3,12 +3,16 @@ import numpy as np
 from io import BytesIO
 from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtWidgets import QFileDialog
 from DSTextureStudio.Enums import Game
-from DSTextureStudio.GUI import gameTypeDialog
+from DSTextureStudio.GUI import gameTypeDialog, InvalidImagePrompt
 from DSTextureStudio.GameInfo import LAYOUT_PATHS
-from DSTextureStudio.Utilities import path_has_sequence
+from DSTextureStudio.Utilities import path_has_sequence, checkBlockSize, align_up, tupleAdd
 from soulstruct.dcx import core
 import tempfile
+import logging
+
+logger = logging.getLogger(__name__)
 
 def getLayoutData(dcx_path):
     with open(dcx_path, "rb") as f:
@@ -128,3 +132,58 @@ def getLayoutPath(game, **kwargs):
     
     layout_name - name of the .layout file"""
     return LAYOUT_PATHS[game].format(**kwargs)
+
+def padImage(img: Image.Image, new_size: tuple[int, int]) -> Image.Image:
+    """Pads an image to a multiple of align."""
+    if new_size[0] < img.width or new_size[1] < img.height:
+        raise ValueError("new_size must be at least the current image size")
+
+    padded = Image.new("RGBA", new_size, (0, 0, 0, 0))
+    padded.paste(img, (0, 0))
+
+    return padded
+
+def validateImageForSwizzle(img: Image.Image, parent_dims: tuple = (0, 0), padding: tuple = (0, 0)) -> Image.Image|None:
+    final_dims = tupleAdd([img.size, parent_dims, padding])
+
+    if checkBlockSize(img=final_dims, align=8):
+        return img
+
+    dlg = InvalidImagePrompt()
+    if not dlg.exec():
+        return None
+
+    final_required = (align_up(final_dims[0]), align_up(final_dims[1]),)
+
+    required = (
+        img.width + (final_required[0] - final_dims[0]),
+        img.height + (final_required[1] - final_dims[1]),
+    )
+
+    match dlg.selected():
+        case InvalidImagePrompt.IGNORE:
+            return img
+
+        case InvalidImagePrompt.CANCEL:
+            return None
+
+        case InvalidImagePrompt.RESIZE:
+            logger.info("Resampling image to dimensions: %s", required)
+            return img.resize(required, Image.Resampling.LANCZOS)
+
+        case InvalidImagePrompt.PAD:
+            logger.info("Padding image to dimensions: %s", required)
+            return padImage(img, required)
+
+        case InvalidImagePrompt.NEW:
+            filename, _ = QFileDialog.getOpenFileName(None, "Select Image", "", "Image Files (*.png *.dds *.jpg *.jpeg *.webm);;All Files (*.*)",)
+            if not filename:
+                return None
+
+            logger.info("Validating new image: %s", filename)
+
+            with Image.open(filename) as new_img:
+                return validateImageForSwizzle(new_img.copy(), parent_dims=parent_dims, padding=padding)
+
+    return None
+

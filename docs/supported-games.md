@@ -1,15 +1,15 @@
 # Supported Games
-| Game Name  | Preview | Export | Replace | Add |
-|------------|---------|--------|---------|-----|
-| DeS        |   ✅    |  ✅    |   ✅    | ❌  |
-| DS1        |   ✅    |  ✅    |   ✅    | ✅  |
-| DS2        |   ✅    |  ✅    |   ✅    | ✅  |
-| DS3        |   ✅    |  ✅    |   ✅    | ✅  |
-| BB         |   ✅    |  ✅    |   ✅    | ❌  |
-| SDT        |   ✅    |  ✅    |   ✅    | ✅  |
-| AC6        |   ✅    |  ✅    |   ✅    | ✅  |
-| ER         |   ✅    |  ✅    |   ✅    | ✅  |
-| NR         |   ✅    |  ✅    |   ✅    | ✅  |
+| Game Name  | Preview | Export | Replace Textures | Custom Icons | Custom Atlases/Files | Modify Custom Textures |
+|------------|---------|--------|------------------|--------------|----------------------|------------------------|
+| DeS        |   ✅    |  ✅    |       ✅       |  Mapped Only  |          ✅         |      Replace Only      |
+| DS1        |   ✅    |  ✅    |       ✅       |  Mapped Only  |          ✅         |      Replace Only      |
+| DS2        |   ✅    |  ✅    |       ✅       |      ✅      |          ✅         |           ✅           |
+| DS3        |   ✅    |  ✅    |       ✅       |  Mapped Only  |          ✅         |      Replace Only      |
+| BB         |   ✅    |  ✅    |       ✅       |  Mapped Only  |          ✅         |      Replace Only      |
+| SDT        |   ✅    |  ✅    |       ✅       |      ✅      |          ✅         |           ✅           |
+| AC6        |   ✅    |  ✅    |       ✅       |      ✅      |          ✅         |           ✅           |
+| ER         |   ✅    |  ✅    |       ✅       |      ✅      |          ✅         |           ✅           |
+| NR         |   ✅    |  ✅    |       ✅       |      ✅      |          ✅         |           ✅           |
 
 
 ### Notes:

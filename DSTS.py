@@ -18,18 +18,17 @@ from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
-from soulstruct.base.textures.dds.core import DDS
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
-from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize
+from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
-from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir, checkBlockSize, padImage, tupleAdd, align_up
+from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir
 
 BLANK_PATH = Path('.')
 
@@ -126,11 +125,11 @@ class TextureStudio(QMainWindow):
         layout.addWidget(splitter)
         self.setCentralWidget(container)
 
+    def hasPendingChanges(self):
+        return any((self.pending_additions, self.pending_replacements, self.pending_new_atlases))
+
     def closeEvent(self, event):
-        def hasPendingChanges():
-            return any((self.pending_additions, self.pending_replacements, self.pending_new_atlases))
-        
-        if not hasPendingChanges():
+        if not self.hasPendingChanges():
             event.accept()
             return
 
@@ -532,23 +531,15 @@ class TextureStudio(QMainWindow):
 
         match self.game.name:
             case 'Bloodborne':
-                img = Image.open(img_path)
+                img = validateImageForSwizzle(Image.open(img_path))
+                if img is None:
+                    return
+                
                 w,h = img.size
 
-                if not checkBlockSize((w,h)):
-                    query = showQuery("Warning", "Swizzled textures should have dimensions divisible by 8.\nWould you like to pad this texture?")
-                    if query == QMessageBox.Cancel:
-                        logger.warning("Returned on non-valid texture dimensions. User selected Cancel when prompted to pad image.")
-                        return
-                    elif query == QMessageBox.Yes:
-                        required_w = align_up(w) - w
-                        required_h = align_up(h) - h
-                        img = padImage(img, (required_w, required_h))
-                        w, h = img.size
-                        logger.warning("Padded image to dimensions: %s", img.size)
-                        with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                            img_path = tmp.name
-                            img.save(tmp.name)
+                with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                    img_path = tmp.name
+                    img.save(tmp.name)
 
                 platform = TPFPlatform.PS4
                 consoleinfo = TPFTexture.ConsoleInfo(
@@ -617,12 +608,15 @@ class TextureStudio(QMainWindow):
         atlas_obj = self.atlases.get(atlas_name)
         subs = atlas_obj.subtextures
 
-        if self.game.name == "Bloodborne" and len(subs) == 0:
-            showError("Sorry, you can't modify custom BB atlases right now.")
+        if len(subs) == 0:
+            showError("Sorry, this atlas isn't mapped yet!\nConsider mapping them yourself in Dimensions.json :D")
+            return
         
         if atlas_obj.parent == "None":
             showError("This file has no layout.")
             return
+        
+        atlas_img = self.getPilImage(atlas_name)
 
         match mode:
             case IconMode.Append:
@@ -648,20 +642,11 @@ class TextureStudio(QMainWindow):
                 else:
                     w, h = img.size
 
-                atlas_img = self.getPilImage(atlas_name)
-
-                new_dims = tupleAdd([atlas_img.size, img.size, (padding, padding)])
-                if self.game.name == "Bloodborne" and not checkBlockSize(new_dims): # dimensions are not divisible by 4
-                    query = showQuery("Warning", "Swizzled textures should have dimensions divisible by 8.\nWould you like to pad this texture?")
-                    if query == QMessageBox.Cancel:
-                        logger.warning("Returned on non-valid texture dimensions. User selected Cancel when prompted to pad image.")
+                if self.game.name == "Bloodborne": # check for valid img size
+                    img = validateImageForSwizzle(img, atlas_img.size, (padding, padding))
+                    if img is None:
                         return
-                    elif query == QMessageBox.Yes:
-                        required_w = align_up(new_dims[0]) - new_dims[0]
-                        required_h = align_up(new_dims[1]) - new_dims[1]
-                        img = padImage(img, (required_w, required_h))
-                        w, h = img.size
-                        logger.warning("Padded image to dimensions: %s", img.size)
+                    w, h = img.size
 
                 used_rects = [st.box(padding=padding) for st in subs]
                 pos = getFreeSpace(atlas_img.size, used_rects, w, h, padding=padding)
@@ -713,6 +698,11 @@ class TextureStudio(QMainWindow):
 
     def clear(self):
         """Completely reset the window."""
+        if self.hasPendingChanges():
+            result = QMessageBox.question(self, "Active Changes", "You have active changes. Are you sure you want to discard them?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if result != QMessageBox.Yes:
+                return False
+
         self.setWindowTitle("DSTS")
         self.atlas_list.clear()
         self.subtexture_list.clear()
@@ -727,6 +717,7 @@ class TextureStudio(QMainWindow):
         self.game = Game(None)
         self.preview_label.setText("Texture Preview")
         self.info_label.setText(("Texture Info", "Texture Info"))
+        return True
 
     def checkOodleDLL(self):
         """Find the oodle dll, or prompt for its location"""
@@ -767,7 +758,8 @@ class TextureStudio(QMainWindow):
 
     def openDcxDialog(self, file: Optional[Path] = None, dirmode: bool = False):
         """Handles everything to do with loading files. If dirmode = True, loads every dcx/tpf in a directory."""    
-        self.clear()
+        if not self.clear():
+            return
         self.checkOodleDLL()
 
         if file:

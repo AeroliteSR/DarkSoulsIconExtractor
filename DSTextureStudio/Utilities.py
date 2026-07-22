@@ -51,15 +51,6 @@ def getDSTSdir() -> Path:
 def loadJson(name: str, dir: str = "defs"):
     with open(getDSTSdir() / dir / f"{name}.json", 'r') as file:
         return json.load(file)
-    
-def padImage(img: Image.Image, extra: tuple[int, int]) -> Image.Image:
-    """Pads an image to a multiple of align."""
-    extra_w, extra_h = extra
-
-    padded = Image.new("RGBA", (img.width + extra_w, img.height + extra_h), (0, 0, 0, 0))
-    padded.paste(img, (0, 0))
-
-    return padded
 
 def align_up(value: int, align: int = 8) -> int:
     return (value + align - 1) & ~(align - 1)
@@ -67,7 +58,6 @@ def align_up(value: int, align: int = 8) -> int:
 def checkBlockSize(img: Image.Image|tuple, align=8) -> bool:
     """Return True if image dimensions are divisible by alignment, else False"""
     w,h = img if isinstance(img, tuple) else img.size
-    print(w, h, (not (w % align or h % align)))
     return not (w % align or h % align)
 
 def tupleAdd(tuples: list[tuple]) -> tuple:
