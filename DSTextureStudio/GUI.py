@@ -559,7 +559,7 @@ class CompressionPrompt(QDialog):
 
         self.layout = QVBoxLayout()
 
-        self.compression_label = QLabel(f"Select compression for {name}:")
+        self.compression_label = QLabel(f"Select compression for: \'{name}\'")
         self.compression_label.setToolTip("Set to Null to write uncompressed TPF")
         self.layout.addWidget(self.compression_label)
         self.format_input = QComboBox()

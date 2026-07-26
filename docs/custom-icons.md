@@ -1,7 +1,7 @@
 # Adding Custom Textures
 
 ## Important:
-This process is primarily for games that use layout systems, aka Sekiro, Elden Ring, Nightreign, and Armored Core 6. (though AC6 is currently not supported)
+This process is primarily for games that use layout systems, aka Sekiro, Elden Ring, Nightreign, and Armored Core 6.  
 If you want to add a new icon to an old game such as Dark Souls 1 or 3, disable `Hide Blank Icons` in [Settings](settings.md) and replace the blank slot using the guide [Replacing Textures](replacing.md). If there are no blank slots, use the Append feature, but ensure your icon matches the required grid pattern for the atlas.
 Creating icons for Dark Souls 2 is much simpler. See [Creating a Custom File](customfiles.md).
 
