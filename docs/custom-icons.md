@@ -39,3 +39,6 @@ Still don't know what 'half' does :)
 Checking `Resize Image` flags DSTS to scale your image down to a given width and height using LANCZOS. I would recommend just using an input image of the correct dimensions, but this may be helpful regardless.
 
 After filling out the subtexture's info, you will be prompted for an image on your computer. png or dds is recommended but any PIL compatible format should work.
+
+### Notes:
+ - Icon #0 in Dark Souls generally corresponds to the "Empty Icon" that's used if nothing is held in that slot. For this reason, you probably want to avoid modifying it if you're trying to add a custom icon.
