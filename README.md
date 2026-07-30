@@ -44,7 +44,7 @@ A known issue to watch out for is that DSTS detects if it's hi/low using the fil
 the game's vanilla path or a mod folder, it will default to `hi` and any exports that affect layouts will write that as the root. So the `low` versions will be mistakenly named `hi` which you'll have to change with WitchyBND by editing the given xml. Usually you'll be modding the `hi` versions anyway but it's good to be aware of this. This issue doesn't apply to Nightreign which specifies the version in the file name. (_h/_l)  
   
 ## Settings:  
-`Custom Names` - This setting replaces the internal names with mapped ones in `GameInfo.py`. 
+`Custom Names` - This setting replaces the internal names with mapped ones in \defs. 
 This setting can be especially useful for if you don't know the ID of an item in a big list, allowing you to search by its display name. 
 Some data, such as Nightreign garbs and Sekiro bosses, were mapped manually, but most of it was scripted from Smithbox exports.  
 `Hide Blank Icons` - Only for older games with no layout system. DSTS crops the atlases in a grid layout. Because of this, some 'tiles' 
@@ -67,7 +67,7 @@ If you want it to search through atlases (for example, for DS2), check `Search A
   
 ## Texture replacement
 The `Replace` button selects whichever texture you currently have in the preview, whether that is an atlas or one of its subtextures. It then prompts you 
-for an image file. The image you selected is then patched into the atlas/icon within memory. Going to `File -> Apply Replacements` will then export your 
+for an image file. The image you selected is then patched into the atlas/icon within memory. Going to `File -> Save As` will then export your 
 changes as a tpf/dcx file, which should work as is. Some testing showed that Witchy seems to find the files to be agreeable.  
   
 ## Adding custom icons
