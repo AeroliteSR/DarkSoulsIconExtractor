@@ -42,7 +42,7 @@ _**Note**_: The high resolution versions of Elden Ring and Nightreigns's icons a
 Be aware that opening this directory in DSTS will use a LOT of resources. (~3.4GB of RAM for ER and ~1.3GB for NR)  
   
 # Credits:
-Grimrukh for making soulstruct, which this application heavily depends on  
+Grimrukh for making soulstruct, which this application heavily depends on.  
 Kmstr and Managarm for their suggestions, feedback and testing throughout development! :)) 
    
 # Licensing and info:
