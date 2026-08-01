@@ -21,14 +21,14 @@ from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
-from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified
+from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
-from DSTextureStudio.Utilities import replaceTerms, path_has_sequence, loadJson, getDSTSdir
+from DSTextureStudio.Utilities import replaceTerms, loadJson, getDSTSdir
 
 BLANK_PATH = Path('.')
 
@@ -54,7 +54,6 @@ class TextureStudio(QMainWindow):
         self.pending_replacements = {}
         self.pending_additions = {}
         self.pending_new_atlases = {}
-        self.RESOLUTIONS = {}
         self.game = Game(None)
 
         self.console = ConsoleWindow(self, emitter=log_emitter)
@@ -62,6 +61,7 @@ class TextureStudio(QMainWindow):
             instance=lambda: self,
             atlases=lambda: self.atlases,
             current=lambda: self.current_atlas,
+            file=lambda: self.atlas_list.currentItem().data(Qt.UserRole+1),
             game=lambda: self.game,
             crop=lambda: self.current_crop,
             cache=lambda: self.thumbnail_cache,
@@ -71,7 +71,6 @@ class TextureStudio(QMainWindow):
             changes=lambda: {"replacements":self.pending_replacements, "additions":self.pending_additions, "custom":self.pending_new_atlases},
             loaded=lambda: self.LOADED_DCX_FILES,
             layouts=lambda: self.LAYOUT_DATA,
-            resolutions=lambda: self.RESOLUTIONS
         )
         self.createMenu()
 
@@ -499,10 +498,13 @@ class TextureStudio(QMainWindow):
                 
         if self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
             files = list(self.LOADED_DCX_FILES.keys())
-            ok, parent = showSelectOptions("Select parent file", "Files:", files)
-            if not ok:
-                return
-            parent = Path(parent)
+            if len(files) > 1:
+                ok, parent = showSelectOptions("Select parent file", "Files:", files)
+                if not ok:
+                    return
+                parent = Path(parent)
+            else:
+                parent = files[0]
         else:
             parent = "None"
 
@@ -563,6 +565,7 @@ class TextureStudio(QMainWindow):
                 )
 
             case _:
+                img = Image.open(img_path)
                 platform = TPFPlatform.PC
                 consoleinfo = None
 
@@ -571,6 +574,7 @@ class TextureStudio(QMainWindow):
         new_atlas = Atlas(
             name=name,
             texture=blank,
+            dimensions=img.size,
             parent=parent
         )
 
@@ -608,7 +612,7 @@ class TextureStudio(QMainWindow):
         atlas_obj = self.atlases.get(atlas_name)
         subs = atlas_obj.subtextures
 
-        if len(subs) == 0:
+        if self.game.type != GameType.MODERN and len(subs) == 0:
             showError("Sorry, this atlas isn't mapped yet!<br>Consider mapping them yourself in Dimensions.json :D")
             return
         
@@ -713,7 +717,6 @@ class TextureStudio(QMainWindow):
         self.pending_additions = {}
         self.pending_replacements = {}
         self.pending_new_atlases = {}
-        self.RESOLUTIONS = {}
         self.game = Game(None)
         self.preview_label.setText("Texture Preview")
         self.info_label.setText(("Texture Info", "Texture Info"))
@@ -827,7 +830,7 @@ class TextureStudio(QMainWindow):
 
                 if len(available) > 1:
                     ok, choice = showSelectOptions("Select Resolution", f"{prefix} has both high and low resolution. Which do you want?", 
-                                                        [i.display   for i in available])
+                                                   [i.display for i in available])
                     if not ok:
                         return
                     choice = next(r for r in available if r.name == choice)
@@ -838,19 +841,16 @@ class TextureStudio(QMainWindow):
                 layout = data[choice].get("layout")
 
                 if tpf and not layout and ('_common_' in Path(tpf).stem):
-                    layout_path = QFileDialog.getOpenFileName(self, f"Select layout for {tpf.name}", str(tpf.parent), "Layout Files (*.sblytbnd.dcx)")[0]
+                    layout = Path(QFileDialog.getOpenFileName(self, f"Select layout for {tpf.name}", str(tpf.parent), "Layout Files (*.sblytbnd.dcx)")[0])
 
-                    if layout_path:
-                        layout = Path(layout_path)
-                    else:
-                        showError("Layout file doesn't exist. Loading raw atlases instead.")
+                    if not (layout != BLANK_PATH and layout.exists()):
+                        layout = None
+                        logger.warning("Layout file for %s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", tpf.name)
 
-                if layout:
+                if layout is not None:
                     file_mappings.append({"file": tpf, "layout": layout})
                 else:
                     file_mappings.append(tpf)
-                
-                self.RESOLUTIONS[prefix] = choice
 
             file_mappings.extend(standalone) # no layout
 
@@ -869,17 +869,15 @@ class TextureStudio(QMainWindow):
                         layout = try_lyt
                     else:
                         layout = Path(QFileDialog.getOpenFileName(None, "Navigate to corresponding sblytbnd.dcx", "", "Layout Files (*.sblytbnd.dcx)")[0])
+                        if not (layout != BLANK_PATH and layout.exists()):
+                            layout = None
+                            logger.warning("Layout file for %s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", base_name)
 
-                        if not layout.exists():
-                            showError("Layout file doesn't exist!")
-                            return
-
-                if layout:
+                if layout is not None:
                     file_mappings.append({"file": f, "layout": layout})
                 else:
                     file_mappings.append(f)
 
-                self.RESOLUTIONS[base_name] = Resolution.LOW if path_has_sequence(f.parts, ['menu', 'low']) else Resolution.HI
         else:
             file_mappings = files
 
@@ -1185,7 +1183,7 @@ class TextureStudio(QMainWindow):
 
         self.r_thread = QThread()
         self.r_worker = WriteWorker(self.pending_new_atlases, self.pending_replacements, self.pending_additions, self.LOADED_DCX_FILES, self.LAYOUT_DATA,
-                                      self.getPilImage, self.game, self.RESOLUTIONS, output_dir)
+                                      self.getPilImage, self.game, output_dir)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
@@ -1405,7 +1403,7 @@ class TextureStudio(QMainWindow):
         # Load subtextures
         self.subtexture_list.blockSignals(True)
         self.subtexture_list.clear()
-        for sub in self.atlases.get(atlas_name, Atlas).subtextures:
+        for sub in self.atlases.get(atlas_name).subtextures:
             if self.btn_hideBlankIcons.isChecked() and sub.blank:
                 continue
             name = sub.name

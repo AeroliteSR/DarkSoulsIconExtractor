@@ -5,7 +5,6 @@ import os
 from io import BytesIO
 from copy import deepcopy
 from tempfile import NamedTemporaryFile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image
 import threading
@@ -18,8 +17,8 @@ from soulstruct.base.textures.dds import DDS
 from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
-from DSTextureStudio.Enums import ExportMode, Resolution, Game, GameType
-from DSTextureStudio.Helpers import createDebugGrid, getLayoutData
+from DSTextureStudio.Enums import ExportMode, Game, GameType
+from DSTextureStudio.Helpers import createDebugGrid
 from DSTextureStudio.log_utils import format_exc_clean
 from DSTextureStudio.Utilities import replaceTerms, loadJson
 
@@ -114,23 +113,20 @@ class LoadWorker(QObject):
         for f_idx, file in enumerate(self.file_mappings, 1):
             percent = int(f_idx / total_files * 100 - 1)
             if isinstance(file, dict):
+                _file: Path = file['file']
                 layout_path = file['layout']
-                textures_dict: dict = self.generateTextDict(file['file'], percent)
+                textures_dict: dict = self.generateTextDict(_file, percent)
 
-                layout_xml = getLayoutData(layout_path)
-                root = ET.fromstring(layout_xml, parser=ET.XMLParser(encoding="utf-8"))
-                self.progress.emit(percent, "Parsing layout XML...")
+                self.progress.emit(percent, "Parsing layout binder...")
+                atlas_layouts = AtlasLayout.from_binder(layout_path)
+                self.LAYOUT_DATA[_file] = atlas_layouts
 
-                atlas_layouts = [AtlasLayout.from_element(el) for el in root.findall("TextureAtlas")]
-                self.LAYOUT_DATA[file['file']] = atlas_layouts
-
+                logger.info("Successfully parsed SB layout binder with %s entries", len(atlas_layouts))
 
                 layout_lookup = {
                     Path(atlas.imagePath).stem: atlas
                     for atlas in atlas_layouts
                 }
-
-                logger.info("Successfully loaded %i shoebox layouts", len(atlas_layouts))
 
                 for filename, texture in textures_dict.items():
                     texture_atlas = layout_lookup.get(filename)
@@ -309,7 +305,7 @@ class WriteWorker(QObject):
     requestCompression = Signal(str)
     finished = Signal(bool, str, Path)  # success, message
 
-    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, resolutions, output):
+    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, output):
         super().__init__()
         self._event = threading.Event()
         self._result = None
@@ -321,7 +317,6 @@ class WriteWorker(QObject):
         self.LOADED_DCX_FILES = loaded_files
         self.LAYOUT_FILES = layouts
         self.game = game
-        self.RESOLUTIONS = resolutions
         self.output_dir = output
 
     def promptCompression(self, name):
@@ -393,13 +388,6 @@ class WriteWorker(QObject):
                 for layout in layout_objs
             }
 
-            filename = dcx_path.name.split('.')[0]
-            res = self.RESOLUTIONS.get(filename, Resolution.HI).display # fallback to high *just* in case
-            if self.game.name == "Nightreign":
-                filename = replaceTerms(filename, {"_h": "", "_l": ""})
-                if res == "Hi":
-                    res = "High" # NR is the ONLY game that usese a different name for ts
-
             for atlas_name, atlas_ops in data["atlases"].items():
                 additions = atlas_ops["additions"]
                 if not additions:
@@ -413,20 +401,19 @@ class WriteWorker(QObject):
 
                 else:
                     logger.info("Creating layout entry for '%s' with %i subtexture(s)", atlas_name, len(additions))
+                    first_obj: AtlasLayout = layout_objs[0] # dummy used to fetch common info
 
-                    match self.game.name:
-                        case "Nightreign":
-                            imgpath = rf"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
-
-                        case "Armored Core 6":
-                            imgpath = rf"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
-
-                        case _:
-                            imgpath = f"{atlas_name}.png"
+                    imgpath = AtlasLayout.getImagePath(self.game, res=first_obj.res.display, atlas_name=atlas_name)
+                    entry_path = first_obj.commonPath / f"{atlas_name}.layout"
+                    dims = None
+                    if self.game.name == "Nightreign": # NR keeps width and height info in each .layout file's root
+                        dims = self.getPilImage(atlas_name, return_atlas=True).dimensions
 
                     new_layout = AtlasLayout.create(
-                        image_path=imgpath,
-                        subtextures=additions
+                        imagePath=imgpath,
+                        entryPath=entry_path,
+                        subtextures=additions,
+                        dimensions=dims
                     )
 
                     layout_objs.append(new_layout)
@@ -435,8 +422,6 @@ class WriteWorker(QObject):
             file = dcx_path.name.replace('.tpf.dcx', '.sblytbnd.dcx')
             AtlasLayout.build(
                 layout_objs=layout_objs,
-                game=self.game,
-                res=res,
                 output=self.output_dir / file
             )
             logger.info("Successfully wrote file: %s", file)

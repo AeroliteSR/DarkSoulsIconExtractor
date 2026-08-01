@@ -49,14 +49,28 @@ class Game():
 
 class Resolution(Enum):
     HI = auto()
+    HIGH = auto()
     LOW = auto()
 
     @property
     def display(self):
         return {
             Resolution.HI: "Hi",
+            Resolution.HIGH: "High",
             Resolution.LOW: "Low"
         }[self]
+
+    @classmethod
+    def from_str(cls, text) -> "Resolution":
+        match text:
+            case "Hi":
+                return cls.HI
+            case "High":
+                return cls.HIGH
+            case "Low":
+                return cls.LOW
+            case _:
+                raise ValueError("Value should be str(hi/low/high)")
 
 class BackgroundMode(IntEnum):
     BLACK = 0

@@ -5,21 +5,11 @@ from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import QFileDialog
 from DSTextureStudio.Enums import Game
 from DSTextureStudio.GUI import gameTypeDialog, InvalidImagePrompt
-from DSTextureStudio.GameInfo import LAYOUT_PATHS
 from DSTextureStudio.Utilities import path_has_sequence, checkBlockSize, align_up, tupleAdd
-from soulstruct.dcx import core
 import tempfile
 import logging
 
 logger = logging.getLogger(__name__)
-
-def getLayoutData(dcx_path):
-    with open(dcx_path, "rb") as f:
-        decompressed_bytes, _ = core.decompress(f)
-        start_index = decompressed_bytes.find(b"<TextureAtlas")
-        xml_bytes = decompressed_bytes[start_index:]
-        xml_text = xml_bytes.decode("utf-8", errors="ignore").replace("\x00", "")
-        return f"<Root>{xml_text}</Root>"
 
 def getFreeSpace(atlas_size, used_rects, w, h, step=4, padding=2):
     atlas_w, atlas_h = atlas_size
@@ -126,19 +116,6 @@ def createBlankImage(dimensions: tuple) -> str:
 
     return temp_file.name
 
-def getLayoutPath(game, **kwargs):
-    """
-    Returns full virtual path for a layout file including common root.
-    
-    Expects:
-    
-    file - parent file, eg. '01_Common`
-    
-    format_mode - what resolution the file is for. generally hi/low
-    
-    layout_name - name of the .layout file"""
-    return LAYOUT_PATHS[game].format(**kwargs)
-
 def padImage(img: Image.Image, new_size: tuple[int, int]) -> Image.Image:
     """Pads an image to a multiple of align."""
     if new_size[0] < img.width or new_size[1] < img.height:
@@ -192,4 +169,3 @@ def validateImageForSwizzle(img: Image.Image, parent_dims: tuple = (0, 0), paddi
                 return validateImageForSwizzle(new_img.copy(), parent_dims=parent_dims, padding=padding)
 
     return None
-

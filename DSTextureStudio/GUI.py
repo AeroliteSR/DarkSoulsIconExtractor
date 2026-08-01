@@ -461,8 +461,8 @@ class TextureNamePrompt(QDialog):
             image_id = self.id_input.text()
             if not image_id.isdigit() or not 0 <= int(image_id) < 65536:
                 showError(
-                    "Inputted ID is not an asserted UInt16.\n"
-                    "This may throw errors in Smithbox or elsewhere.\n"
+                    "Inputted ID is not an asserted UInt16.<br>"
+                    "This may throw errors in Smithbox or elsewhere.<br>"
                     "Rename this icon if that wasn't your intention.",
                     "Warning",
                     QMessageBox.Warning)
@@ -545,7 +545,7 @@ class DefineSubtexturePrompt(QDialog):
 
         id = self.id_input.text()
         if not id.isdigit() or not 0 <= int(id) < 65536:
-            showError("Inputted ID is not an asserted UInt16.\nThis may silently throw errors in Smithbox or elsewhere.\nRename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
+            showError("Inputted ID is not an asserted UInt16.<br>This may silently throw errors in Smithbox or elsewhere.<br>Rename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
         
         hwcoords = (self.width_input.value(), self.height_input.value())
         xycoords = (self.x_input.value(), self.y_input.value())
@@ -932,7 +932,15 @@ def showError(text, title="Error", _type=QMessageBox.Critical):
     msg.setIcon(_type)
     msg.setWindowTitle(title)
     msg.setTextFormat(Qt.RichText)
-    msg.setText(text) 
+
+    if _type == QMessageBox.Critical:
+        msg.setText(f"""
+            <b>An unexpected error occurred.</b><br><br>
+            <pre>{text}</pre>
+            """)
+    else:
+        msg.setText(text)
+
     msg.exec()
 
 def showQuery(title, text):

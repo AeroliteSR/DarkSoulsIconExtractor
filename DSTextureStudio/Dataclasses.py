@@ -7,20 +7,33 @@ from pathlib import Path
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.dcx import DCXType
-from DSTextureStudio.Helpers import getLayoutPath
-from DSTextureStudio.Utilities import replaceTerms
-from DSTextureStudio.Enums import ImageType, Game
+from DSTextureStudio.Utilities import path_has_sequence
+from DSTextureStudio.Enums import ImageType, Game, Resolution
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class AtlasLayout:
+    path: Path # internal entry paths
     element: ET.Element = field(default_factory=lambda: ET.Element("TextureAtlas"))
+
+    # region Properties
 
     @property
     def name(self) -> str:
         return Path(self.imagePath).stem
+
+    @property
+    def commonPath(self) -> Path:
+        return Path(self.path).parent
+
+    @property
+    def res(self) -> Resolution|None:
+        for r in ["Hi", "Low", "High"]:
+            if path_has_sequence(self.path.parts, [r]):
+                return Resolution.from_str(r)
+        return None
     
     @property
     def imagePath(self) -> str:
@@ -29,28 +42,52 @@ class AtlasLayout:
     @property
     def xml(self) -> str:
         return ET.tostring(self.element, encoding='utf-8', method='xml')
-    
-    @classmethod
-    def from_element(cls, el: ET.Element) -> "AtlasLayout":
-        return cls(element=el)
-    
-    @classmethod
-    def create(cls, image_path: str, subtextures: list[SubTexture]) -> "AtlasLayout":
-        """Creates a new AtlasLayout entry."""
-        root = ET.Element("TextureAtlas")
-        root.set("imagePath", image_path)
 
-        obj = cls(element=root)
+    # region Build
+    
+    @classmethod
+    def from_element(cls, path, el: ET.Element) -> "AtlasLayout":
+        return cls(path=path,element=el)
+
+    @classmethod
+    def from_binder(cls, binder: Binder|Path) -> list["AtlasLayout"]:
+        if isinstance(binder, Path):
+            binder = Binder(binder)
+
+        return [
+            cls(
+                path=Path(entry.path),
+                element=ET.fromstring(entry.data, parser=ET.XMLParser(encoding="utf-8"))
+            ) for entry in binder
+        ]
+    
+    @classmethod
+    def create(cls, imagePath: str, entryPath: str, subtextures: list[SubTexture], dimensions: Optional[tuple[int, int]] = None) -> "AtlasLayout":
+        """Creates a new AtlasLayout entry.
+        
+        imagePath - the internal path name written in each TextureAtlas element in the .layout files
+        
+        entryPath - the internal path name OF each .layout file and its BinderEntry
+
+        subtextures - list of SubTexture objects to add to the Layout's root
+        
+        dimensions - optional TextureAtlas properties for Nightreign. Expects tuple[width, height]"""
+
+        root = ET.Element("TextureAtlas")
+        root.set("imagePath", imagePath)
+        if dimensions is not None:
+            root.set("width", str(dimensions[0]))
+            root.set("height", str(dimensions[1]))
+
+        obj = cls(path=entryPath, element=root)
         obj.add_subtextures(subtextures)
         return obj
 
-    def build(layout_objs: list[AtlasLayout], game: Game, res: str, output: Path) -> None:
+    def build(layout_objs: list[AtlasLayout], output: Path) -> None:
         """
         Writes a list of AtlasLayouts to sblytbnd.dcx
 
-        layout_objs - list of all loaded AtlasLayouts
-
-        res - resolution layout is for. Eg. Hi/Low.
+        layout_objs - list of all loaded AtlasLayouts to be added as entries to the Binder
 
         output - where to write dcx to"""
 
@@ -61,24 +98,18 @@ class AtlasLayout:
         )
 
         for atlas in layout_objs:
-            xml_bytes = ET.tostring(atlas.element, encoding='utf-8', method='xml')
-            layout_path = getLayoutPath(
-                game=game.name,
-                file="01_Common", # maybe one day this will need to be dynamically fetched, right now only these files have layouts anyway.
-                format_mode=res,
-                layout_name=Path(replaceTerms(atlas.imagePath, {'.png': '.layout', '.tif': '.layout'})).name # only eg. "name.layout", not full path
+            binder.add_entry(
+                entry=BinderEntry(
+                    data=ET.tostring(atlas.element, encoding='utf-8', method='xml'),
+                    entry_id=binder.get_first_new_entry_id_in_range(0, 1000000),
+                    path=str(atlas.path),
+                    flags=0x2
+                )
             )
-
-            entry = BinderEntry(
-                data=xml_bytes,
-                entry_id=binder.get_first_new_entry_id_in_range(0, 1000000),
-                path=layout_path,
-                flags=0x2
-            )
-
-            binder.add_entry(entry=entry)
 
         binder.write(output)
+
+    # region Subtexture Handling
 
     def iter_subtextures(self) -> list[ET.Element[str]]:
         return self.element.findall("SubTexture")
@@ -115,21 +146,37 @@ class AtlasLayout:
 
             item.tail = '\r\n'
 
+    # region Helpers
+
+    def getImagePath(game: Game, **kwargs):
+        match game.name:
+            case "Nightreign":
+                imgpath = r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
+            case "Armored Core 6":
+                imgpath = r"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
+            case _:
+                imgpath = r"{atlas_name}.png"
+
+        return imgpath.format(**kwargs)
+
     def __repr__(self) -> str:
         return (
             f"AtlasLayout(\n"
-            f"    name = {self.name}\n"
+            f"    Name = {self.name}\n"
+            f"    Internal Path = {self.path}\n"
             f"    imagePath = {self.imagePath}\n"
-            f"    element = {self.element.__repr__()}\n"
-            f"    subtexture count = {len(self.iter_subtextures())}\n"
+            f"    Element = {self.element.__repr__()}\n"
+            f"    Subtexture Count = {len(self.iter_subtextures())}\n"
             f")"
         )
 
 @dataclass(slots=True)
 class Atlas:
     name: str
-    texture: TPFTexture
     parent: Path
+
+    texture: TPFTexture
+    dimensions: Optional[tuple[int, int]] = None # only needed for custom Atlases, used for writing TextureAtlas xml properties
 
     subtextures: list[SubTexture] = field(default_factory=list)
 
@@ -142,7 +189,7 @@ class Atlas:
     def count(self) -> int:
         """Returns number of child SubTexture objects."""
         return len(self.subtextures)
-    
+
     def add(self, subtexture: SubTexture) -> None:
         """Appends a SubTexture to self list"""
         self.subtextures.append(subtexture)
@@ -190,11 +237,12 @@ class Atlas:
     def __repr__(self) -> str:
         return (
             f"Atlas(\n"
-            f"    name = {self.name}\n"
-            f"    parent = {self.parent}\n"
-            f"    subtexture count = {self.count}\n"
-            f"    texture = \n{indent(self.texture.__repr__(), "        ")}\n"
-           # f"    subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
+            f"    Name = {self.name}\n"
+            f"    Parent = {self.parent}\n"
+            f"    Subtexture Count = {self.count}\n"
+            f"    Dimensions = {self.dimensions}\n"
+            f"    Texture = \n{indent(self.texture.__repr__(), "        ")}\n" 
+           # f"    Subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
         )
 
@@ -231,14 +279,14 @@ class SubTexture:
     def __repr__(self) -> str:
         return (
             f"SubTexture(\n"
-            f"    name = {self.name}\n"
-            f"    parent = {self.parent}\n"
-            f"    is vanilla = {self.vanilla}\n"
-            f"    image = {self.img}\n"
-            f"    coordinates = {self.pos}\n"
-            f"    dimensions = {self.width}x{self.height}\n"
-            f"    blank = {self.blank}\n"
-            f"    half = {self.half}\n"
+            f"    Name = {self.name}\n"
+            f"    Parent = {self.parent}\n"
+            f"    Is Vanilla = {self.vanilla}\n"
+            f"    Image = {self.img}\n"
+            f"    Coordinates = {self.pos}\n"
+            f"    Dimensions = {self.width}x{self.height}\n"
+            f"    Blank = {self.blank}\n"
+            f"    Half = {self.half}\n"
             f")"
         )
     

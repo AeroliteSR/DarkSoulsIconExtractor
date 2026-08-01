@@ -40,12 +40,20 @@ SubtexturePrefix = [
     "MENU_Ch_",
 ]
 
-LAYOUT_PATHS = { 
-    "Sekiro": r"N:\NTC\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}",
+def getEntryPath(game= "Game", **kwargs): # unused function, may be useful info though so I'll leave it here
+    """file - parent file, eg. '01_Common`
+        
+        format_mode - what resolution the file is for. generally hi/low
+        
+        layout_name - name of the .layout file"""
+    match game.name:
+        case "Sekiro": 
+            imgpath = r"N:\NTC\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}"
+        case "Elden Ring": 
+            imgpath = r"N:\GR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}"
+        case "Nightreign": 
+            imgpath = r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\{file}\{format_mode}\{layout_name}"
+        case "Armored Core 6": 
+            imgpath = r"W:\FNR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}"
 
-    "Elden Ring": r"N:\GR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}",
-
-    "Nightreign": r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\{file}\{format_mode}\{layout_name}",
-
-    "Armored Core 6": r"W:\FNR\data\Menu\ScaleForm\SBLayout\{file}\{format_mode}\{layout_name}"
-}
+    return imgpath.format(**kwargs)
