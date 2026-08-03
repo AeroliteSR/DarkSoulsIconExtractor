@@ -32,7 +32,9 @@ Commands and objects are seperated by spaces. Use [] for scripting/lookups and .
 
 ## Some Usage Examples:
 `ls atlases` - Lists the names of all loaded atlases.  
+  
 `repr atlases[Icon00]` or `atlases[current]` - Prints the Atlas object's __repr__(), giving useful info.  
+  
 `layouts[file][0].xml` - Since `layouts` is a dictionary, `[file]` will get all AtlasLayout objects from the current sblyt file. `[0]` selects only the first AtlasLayout. The `.xml` property returns its Element as text to the console, allowing you to see the xml before it's written.  
-
+  
 ![Console Examples](Images/Console-Usage-Examples.png)
