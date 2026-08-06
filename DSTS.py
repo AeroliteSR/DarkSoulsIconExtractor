@@ -11,7 +11,7 @@ from typing import Optional
 from tempfile import NamedTemporaryFile
 # GUI
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
-QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu)
+QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu, QLineEdit)
 from PySide6.QtGui import QIcon, QDesktopServices, QAction
 from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 # Soulstruct
@@ -24,7 +24,7 @@ from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
 from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
-from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, SearchWindow, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
+from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
@@ -78,6 +78,15 @@ class TextureStudio(QMainWindow):
         layout = QHBoxLayout(container)
         splitter = QSplitter(Qt.Horizontal)
 
+        atlas_panel = QWidget()
+        atlas_layout = QVBoxLayout(atlas_panel)
+        atlas_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.atlas_search = QLineEdit()
+        self.atlas_search.setPlaceholderText("Search atlases...")
+        self.atlas_search.textEdited.connect(lambda text: self.filterList(text, self.atlas_list))
+        atlas_layout.addWidget(self.atlas_search)
+
         self.atlas_list = TextureListWidget()
         self.atlas_list.setItemDelegate(Delegate(self.atlas_list))
         self.atlas_list.itemClicked.connect(self.showAtlas)
@@ -85,7 +94,18 @@ class TextureStudio(QMainWindow):
         self.atlas_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.atlas_list.customContextMenuRequested.connect(self.openSubtextureMenu)
         self.atlas_list.add_button.clicked.connect(self.addAtlas)
-        splitter.addWidget(self.atlas_list)
+        atlas_layout.addWidget(self.atlas_list)
+
+        splitter.addWidget(atlas_panel)
+
+        subtexture_panel = QWidget()
+        subtexture_layout = QVBoxLayout(subtexture_panel)
+        subtexture_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.subtexture_search = QLineEdit()
+        self.subtexture_search.setPlaceholderText("Search subtextures...")
+        self.subtexture_search.textEdited.connect(lambda text: self.filterList(text, self.subtexture_list))
+        subtexture_layout.addWidget(self.subtexture_search)
 
         self.subtexture_list = TextureListWidget(mode=ImageType.Subtexture, check_game=lambda: self.game)
         self.subtexture_list.setItemDelegate(Delegate(self.subtexture_list))
@@ -95,7 +115,9 @@ class TextureStudio(QMainWindow):
         self.subtexture_list.customContextMenuRequested.connect(self.openSubtextureMenu)
         self.subtexture_list.def_option.triggered.connect(lambda: self.addIcon(IconMode.Define))
         self.subtexture_list.add_option.triggered.connect(lambda: self.addIcon(IconMode.Append))
-        splitter.addWidget(self.subtexture_list)
+        subtexture_layout.addWidget(self.subtexture_list)
+
+        splitter.addWidget(subtexture_panel)
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
@@ -187,8 +209,6 @@ class TextureStudio(QMainWindow):
         self.settings_menu.addSeparator()
         self.settings_menu.addAction(self.btn_alphaThreshold)
         
-        self.searchButton = menu.addAction(createAction("Search", self.openSearchWindow))
-
         self.help_menu = menu.addMenu("Help")
         self.help_menu.addAction(createAction("Settings", lambda: QMessageBox.information(self, "Settings Info", "<b>Custom Names:</b><br> When enabled, this setting replaces" \
                                                                                                 " most atlas and subtexture names with more user-friendly ones. " \
@@ -225,6 +245,12 @@ class TextureStudio(QMainWindow):
                                                                                        "- <a href='https://linktr.ee/aerolitesr'>Aero</a> :><br><br> </span>")))
         self.help_menu.addSeparator()
         self.help_menu.addAction(createAction("Console", self.console.show))
+
+    def filterList(self, text, widget):
+        text = text.lower()
+        for i in range(widget.count()):
+            item = widget.item(i)
+            item.setHidden(text not in item.text().lower())
 
     def openSubtextureMenu(self, position: QPoint):
         sender = self.sender()
@@ -1032,41 +1058,6 @@ class TextureStudio(QMainWindow):
         self.alphaThreshold = num
         self.btn_alphaThreshold.setText(f"Alpha Threshold = {num}")
         self.showAtlas(self.atlas_list.currentItem())
-
-    def openSearchWindow(self):
-        """Creates a SearchWindow instance and handles the search."""
-
-        def handle_search(text, atlasMode):
-            widget = self.atlas_list if atlasMode else self.subtexture_list
-
-            if widget.count() == 0:
-                showError('No Textures are loaded.')
-                return
-
-            text = text.lower().strip()
-            found = False
-            first_match = None
-
-            for i in range(widget.count()):
-                item = widget.item(i)
-
-                matches = text in item.text().lower()
-                item.setHidden(not matches)
-
-                if matches and first_match is None:
-                    first_match = item
-                    found = True
-
-            if found:
-                widget.setCurrentItem(first_match)
-                first_match.setSelected(True)
-                widget.scrollToItem(first_match)
-            else:
-                showError('No results found!')
-
-        self.searchInstance = SearchWindow()
-        self.searchInstance.results.connect(handle_search)
-        self.searchInstance.show()
 
     def resolveSubtexture(self, atlas_name, sub_name, atlas_img) -> SubTexture:
         """Return subtexture rect from either layout or grid system."""

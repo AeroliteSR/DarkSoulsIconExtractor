@@ -215,9 +215,13 @@ class Palettes():
         border: 1px solid #555;
     }
 
-    QSpinBox,
+    QSpinBox {
+        background-color: #3C3C3C;
+    }
+
     QLineEdit {
         background-color: #3C3C3C;
+        border-radius: 4px;
     }
 
     QMessageBox,
@@ -301,34 +305,6 @@ class Palettes():
         background: none;
     }
     """
-
-class SearchWindow(QWidget):
-    results = Signal(str, bool) # text, atlas search mode
-
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Search")
-        layout = QVBoxLayout()
-
-        layout.addWidget(QLabel("Search text:"))
-        self.search_input = QLineEdit()
-
-        self.atlas_search = QCheckBox("Search Atlases")
-
-        flags_layout = QVBoxLayout()
-        flags_layout.addWidget(self.atlas_search)
-
-        self.search_button = QPushButton("Search")
-        layout.addWidget(self.search_input)
-        layout.addLayout(flags_layout)
-        layout.addWidget(self.search_button)
-
-        self.setLayout(layout)
-        self.search_button.clicked.connect(self.emit_search)
-
-    def emit_search(self):
-        text = self.search_input.text()
-        self.results.emit(text, self.atlas_search.isChecked())
 
 class TextureNamePrompt(QDialog):
     def __init__(self, mode: ImageType = ImageType.Subtexture, resizeprompt=True, padprompt=True, halfprompt=True, formatprompt=True, blankprompt=True):
