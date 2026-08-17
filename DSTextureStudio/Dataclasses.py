@@ -208,36 +208,36 @@ class Atlas:
         """Appends a SubTexture to self list"""
         self.subtextures.append(subtexture)
 
-    def match(self, name: str) -> tuple[SubTexture, int]|None:
+    def match(self, name: str) -> tuple[SubTexture, int]|tuple[None, None]:
         """Helper function to find SubTexture and index from self list"""
         for idx, sub in enumerate(self.subtextures):
             if sub.name == name:
                 return sub,idx
-        return None
+        return None, None
 
     def fetch(self, name: str) -> SubTexture|None:
         """Returns SubTexture object of a certain name belonging to parent Atlas"""
-        sub = self.match(name)
-        return sub[0] if sub is not None else None
+        sub,_ = self.match(name)
+        return sub if sub is not None else None
     
     def subrename(self, name: str, new_name: str) -> None:
         """Renames SubTextures of a certain name from the Atlas."""
-        sub = self.match(name)
+        sub,_ = self.match(name)
         if sub is not None:
-            sub[0].name = new_name
+            sub.name = new_name
         
     def rem(self, name: str) -> SubTexture|None:
         """Removes SubTextures of a certain name from the Atlas. Returns like {}.pop()"""
-        idx = self.match(name)
+        _,idx = self.match(name)
         if idx is not None:
-            return self.subtextures.pop(idx[1])
+            return self.subtextures.pop(idx)
         return None
 
     def replace(self, name: str, image: Image.Image) -> None:
         """Finds SubTexture object of 'name' and replaces its 'img' field with a provided image"""
-        sub = self.match(name)
+        sub,_ = self.match(name)
         if sub is not None:
-            sub[0].img = image
+            sub.img = image
 
     # region Writing     
     def writetpf(self, output: Path, dcx_type: DCXType = DCXType.Null, encoding: int = 1, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
@@ -280,6 +280,10 @@ class SubTexture:
     @property
     def pos(self) -> tuple[int, int]:
         return (self.x, self.y)
+
+    def setpos(self, x, y):
+        self.x = x
+        self.y = y
 
     def box(self, padding: int = 0) -> tuple[int, int, int, int]:
         """Return tuple of coordinates for a box to crop to this subtexture. Allows optional padding"""

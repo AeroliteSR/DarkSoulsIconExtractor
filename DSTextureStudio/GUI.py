@@ -454,39 +454,41 @@ class TextureNamePrompt(QDialog):
         return self.name_input.text(), fmt, coords
         
 class DefineSubtexturePrompt(QDialog):
-    def __init__(self, maxwidth, maxheight):
+    def __init__(self, maxwidth=8192, maxheight=8192, new=True):
         super().__init__()
         self.setWindowTitle("Prompt")
+        self.new = new
 
         self.layout = QVBoxLayout()
 
-        self.layout.addWidget(QLabel("Prefix:"))
-        self.prefix_input = QComboBox()
-        self.prefix_input.addItems(SubtexturePrefix)
-        self.prefix_input.setEditable(True)
-        self.layout.addWidget(self.prefix_input)
+        if new:
+            self.layout.addWidget(QLabel("Prefix:"))
+            self.prefix_input = QComboBox()
+            self.prefix_input.addItems(SubtexturePrefix)
+            self.prefix_input.setEditable(True)
+            self.layout.addWidget(self.prefix_input)
 
-        self.layout.addWidget(QLabel("Icon ID:"))
-        self.id_input = QLineEdit()
-        self.layout.addWidget(self.id_input)
+            self.layout.addWidget(QLabel("Icon ID:"))
+            self.id_input = QLineEdit()
+            self.layout.addWidget(self.id_input)
         
-        size_layout = QHBoxLayout()
+            size_layout = QHBoxLayout()
 
-        size_layout.addWidget(QLabel("Width:"))
-        self.width_input = QSpinBox()
-        self.width_input.setRange(1, maxwidth)
-        self.width_input.setValue(128)
-        size_layout.addWidget(self.width_input)
+            size_layout.addWidget(QLabel("Width:"))
+            self.width_input = QSpinBox()
+            self.width_input.setRange(1, maxwidth)
+            self.width_input.setValue(128)
+            size_layout.addWidget(self.width_input)
 
-        size_layout.addSpacing(10)
+            size_layout.addSpacing(10)
 
-        size_layout.addWidget(QLabel("Height:"))
-        self.height_input = QSpinBox()
-        self.height_input.setRange(1, maxheight)
-        self.height_input.setValue(128)
-        size_layout.addWidget(self.height_input)
+            size_layout.addWidget(QLabel("Height:"))
+            self.height_input = QSpinBox()
+            self.height_input.setRange(1, maxheight)
+            self.height_input.setValue(128)
+            size_layout.addWidget(self.height_input)
 
-        self.layout.addLayout(size_layout)
+            self.layout.addLayout(size_layout)
 
         xy_layout = QHBoxLayout()
 
@@ -506,8 +508,9 @@ class DefineSubtexturePrompt(QDialog):
 
         self.layout.addLayout(xy_layout)
 
-        self.half_checkbox = QCheckBox("Half")
-        self.layout.addWidget(self.half_checkbox)
+        if new:
+            self.half_checkbox = QCheckBox("Half")
+            self.layout.addWidget(self.half_checkbox)
 
         self.submit_button = QPushButton("Submit")
         self.layout.addWidget(self.submit_button)
@@ -517,12 +520,15 @@ class DefineSubtexturePrompt(QDialog):
         self.submit_button.clicked.connect(self.accept)
 
     def get_result(self):
+        if not self.new: # moving subtexture, NOT making a new one
+            return (self.x_input.value(), self.y_input.value())
+
         half = self.half_checkbox.isChecked()
 
         id = self.id_input.text()
         if not id.isdigit() or not 0 <= int(id) < 65536:
             showError("Inputted ID is not an asserted UInt16.<br>This may silently throw errors in Smithbox or elsewhere.<br>Rename this icon if that wasn't your intention.", "Warning", QMessageBox.Warning)
-        
+
         hwcoords = (self.width_input.value(), self.height_input.value())
         xycoords = (self.x_input.value(), self.y_input.value())
         return f"{self.prefix_input.currentText()}{id}", hwcoords, xycoords, half

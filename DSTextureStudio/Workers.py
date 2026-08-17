@@ -363,7 +363,7 @@ class WriteWorker(QObject):
 
             additions_by_atlas = {}
 
-            for sub in add_data["additions"]:
+            for sub in add_data:
                 if sub.vanilla:
                     continue
 

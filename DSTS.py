@@ -183,7 +183,7 @@ class TextureStudio(QMainWindow):
 
         self.settings_menu = menu.addMenu("Settings")
 
-        self.btn_useCustomNames = QAction("Custom Names", self)
+        self.btn_useCustomNames = QAction("Community Names", self)
         self.btn_useCustomNames.setCheckable(True)
         self.btn_useCustomNames.toggled.connect(self.toggleCustomNames)
 
@@ -277,8 +277,9 @@ class TextureStudio(QMainWindow):
             menu = QMenu(self)
 
             if modify == Modified.ADDED:
-                menu.addAction("Delete", lambda: self.deleteSubtexture(item))
                 menu.addAction("Rename", lambda: self.renameSubtexture(item))
+                menu.addAction("Move", lambda: self.moveSubtexture(item))
+                menu.addAction("Delete", lambda: self.deleteSubtexture(item))
 
             elif modify == Modified.REPLACED:
                 menu.addAction("Revert", lambda: self.revertSubtexture(item))
@@ -326,8 +327,8 @@ class TextureStudio(QMainWindow):
 
         pending = self.pending_additions.get(dcx_file)
         if pending:
-            pending["additions"] = [a for a in pending.get("additions", []) if a.name != sub_name]
-            if not pending["additions"]:
+            pending = [a for a in pending if a.name != sub_name]
+            if not pending:
                 self.pending_additions.pop(dcx_file, None)
 
         repls_file = self.pending_replacements.get(dcx_file, {})
@@ -404,7 +405,7 @@ class TextureStudio(QMainWindow):
         self.atlases.get(atlas_name, {}).subrename(old_name, new_name)
 
         for info in self.pending_additions.values():
-            for a in info.get("additions", []):
+            for a in info:
                 if a.name == old_name:
                     a.name = new_name
 
@@ -417,6 +418,30 @@ class TextureStudio(QMainWindow):
 
         self.rebuildAtlas(atlas_name, dcx_file)
         self.showSubtexture(sub_item)
+
+    def moveSubtexture(self, sub_item):
+        atlas_item = self.atlas_list.currentItem()
+        if not atlas_item or not sub_item:
+            return
+
+        atlas_name = atlas_item.data(Qt.UserRole)
+        dcx_file = atlas_item.data(Qt.UserRole+1)
+        sub_name = sub_item.data(Qt.UserRole)
+
+        additions = self.pending_additions.get(dcx_file)
+
+        sub = next((s for s in additions if s.name == sub_name), None)
+        if sub is None:
+            return
+
+        dlg = DefineSubtexturePrompt(new=False)
+        if not dlg.exec():
+            return
+
+        sub.setpos(*dlg.get_result())
+
+        self.thumbnail_cache.pop(atlas_name, None)
+        self.showAtlas(atlas_item)
 
     def deleteAtlas(self, atlas_item):
         if not atlas_item:
@@ -433,9 +458,8 @@ class TextureStudio(QMainWindow):
 
         add_data = self.pending_additions.get(dcx_file)
         if add_data:
-            add_data["additions"] = [a for a in add_data["additions"] if a.parent != atlas_name]
-
-            if not add_data["additions"]:
+            add_data = [a for a in add_data if a.parent != atlas_name]
+            if not add_data:
                 self.pending_additions.pop(dcx_file, None)
 
         repls = self.pending_replacements.get(dcx_file, {})
@@ -461,7 +485,7 @@ class TextureStudio(QMainWindow):
 
         new_name, *_ = dialog.get_result()
 
-        if any(new_name == a.name for a in self.atlases):
+        if new_name in self.atlases:
             showError(f"An atlas named '{new_name}' already exists!")
             return
 
@@ -471,7 +495,7 @@ class TextureStudio(QMainWindow):
                     atlas.rename(new_name)
 
         for info in self.pending_additions.values():
-            for sub in info["additions"]:
+            for sub in info:
                 if sub.parent == old_name:
                     sub.parent = new_name
 
@@ -482,8 +506,10 @@ class TextureStudio(QMainWindow):
         if old_name in self.thumbnail_cache:
             self.thumbnail_cache[new_name] = self.thumbnail_cache.pop(old_name)
 
-        if any(old_name==a.name for a in self.atlases):
-            self.atlases.get(old_name).rename(new_name)
+        if old_name in self.atlases:
+            item: Atlas = self.atlases.pop(old_name)
+            item.rename(new_name)
+            self.atlases[new_name] = item
 
         atlas_item.setText(new_name)
         atlas_item.setData(Qt.UserRole, new_name)
@@ -709,13 +735,8 @@ class TextureStudio(QMainWindow):
             half=half
         )
 
-        self.pending_additions.setdefault(dcx_file, {
-            "data": self.LAYOUT_DATA.get(dcx_file),
-            "additions": [],
-            "output": dcx_file.with_name(dcx_file.name.replace('.tpf.dcx', '.sblytbnd.dcx'))
-        })
-
-        self.pending_additions[dcx_file]["additions"].append(sub)
+        self.pending_additions.setdefault(dcx_file, [])
+        self.pending_additions[dcx_file].append(sub)
         atlas_obj.add(sub)
 
         self.rebuildAtlas(atlas_name, dcx_file)
@@ -1254,9 +1275,7 @@ class TextureStudio(QMainWindow):
         """Reconstruct the atlas with its changes"""
         base_img = self.resolveAtlas(atlas_name, dcx_file)
 
-        additions = (self.pending_additions.get(dcx_file, {}).get("additions", []))
-
-        for add in additions:
+        for add in self.pending_additions.get(dcx_file, []):
             if add.parent != atlas_name or add.img is None:
                 continue
 
@@ -1368,7 +1387,7 @@ class TextureStudio(QMainWindow):
         
         if sub_name in self.pending_replacements.get(dcx_file, {}).get(atlas_name, {}):
             return Modified.REPLACED
-        additions = self.pending_additions.get(dcx_file, {}).get('additions', [])
+        additions = self.pending_additions.get(dcx_file, [])
         if any(sub_name == i.name for i in additions):
             return Modified.ADDED
         
