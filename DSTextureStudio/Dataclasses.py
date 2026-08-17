@@ -12,7 +12,7 @@ from DSTextureStudio.Enums import ImageType, Game, Resolution
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
-
+# region LAYOUT
 @dataclass(slots=True)
 class AtlasLayout:
     path: Path # internal entry paths
@@ -169,7 +169,7 @@ class AtlasLayout:
             f"    Subtexture Count = {len(self.iter_subtextures())}\n"
             f")"
         )
-
+# region ATLAS
 @dataclass(slots=True)
 class Atlas:
     name: str
@@ -180,6 +180,7 @@ class Atlas:
 
     subtextures: list[SubTexture] = field(default_factory=list)
 
+    # region Properties
     @property
     def itype(self) -> ImageType:
         """Checks if self Atlas object is an atlas with SubTextures or just a plain Texture"""
@@ -190,6 +191,19 @@ class Atlas:
         """Returns number of child SubTexture objects."""
         return len(self.subtextures)
 
+    # region Helpers
+    def rename(self, new_name) -> bool:
+        """Renames Atlas object. Returns True if successful"""
+        if new_name != self.name:
+            self.name = new_name
+            self.texture.stem = new_name
+            for s in self.subtextures:
+                if s.parent is not None:
+                    s.parent = new_name
+            return True
+        return False
+
+    # region Subtexture Helpers
     def add(self, subtexture: SubTexture) -> None:
         """Appends a SubTexture to self list"""
         self.subtextures.append(subtexture)
@@ -204,27 +218,28 @@ class Atlas:
     def fetch(self, name: str) -> SubTexture|None:
         """Returns SubTexture object of a certain name belonging to parent Atlas"""
         sub = self.match(name)
-        return sub[0] if sub else None
+        return sub[0] if sub is not None else None
     
-    def rename(self, name: str, new_name: str) -> None:
+    def subrename(self, name: str, new_name: str) -> None:
         """Renames SubTextures of a certain name from the Atlas."""
         sub = self.match(name)
-        if sub:
+        if sub is not None:
             sub[0].name = new_name
         
     def rem(self, name: str) -> SubTexture|None:
         """Removes SubTextures of a certain name from the Atlas. Returns like {}.pop()"""
         idx = self.match(name)
-        if idx:
+        if idx is not None:
             return self.subtextures.pop(idx[1])
         return None
 
     def replace(self, name: str, image: Image.Image) -> None:
         """Finds SubTexture object of 'name' and replaces its 'img' field with a provided image"""
         sub = self.match(name)
-        if sub:
+        if sub is not None:
             sub[0].img = image
-            
+
+    # region Writing     
     def writetpf(self, output: Path, dcx_type: DCXType = DCXType.Null, encoding: int = 1, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
         """Writes a .tpf file to disk using info from self Atlas object. Mostly useful for DS2 files. Output is parent dir."""
         TPF(platform=platform,
@@ -245,7 +260,7 @@ class Atlas:
            # f"    Subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
         )
-
+# region SUBTEXTURE
 @dataclass(slots=True)
 class SubTexture:
     name: str

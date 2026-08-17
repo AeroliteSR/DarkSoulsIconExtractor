@@ -401,7 +401,7 @@ class TextureStudio(QMainWindow):
             showError(f"A subtexture named '{new_name}' already exists!")
             return
 
-        self.atlases.get(atlas_name, {}).rename(old_name, new_name)
+        self.atlases.get(atlas_name, {}).subrename(old_name, new_name)
 
         for info in self.pending_additions.values():
             for a in info.get("additions", []):
@@ -461,14 +461,14 @@ class TextureStudio(QMainWindow):
 
         new_name, *_ = dialog.get_result()
 
-        if new_name in self.atlases:
+        if any(new_name == a.name for a in self.atlases):
             showError(f"An atlas named '{new_name}' already exists!")
             return
 
         for atlases in self.pending_new_atlases.values():
             for atlas in atlases:
                 if atlas.name == old_name:
-                    atlas.name = new_name
+                    atlas.rename(new_name)
 
         for info in self.pending_additions.values():
             for sub in info["additions"]:
@@ -482,13 +482,8 @@ class TextureStudio(QMainWindow):
         if old_name in self.thumbnail_cache:
             self.thumbnail_cache[new_name] = self.thumbnail_cache.pop(old_name)
 
-        if old_name in self.atlases:
-            item = self.atlases.pop(old_name)
-            item.name = new_name
-            for sub in item.subtextures:
-                if sub.parent is not None:
-                    sub.parent = new_name
-            self.atlases[new_name] = item
+        if any(old_name==a.name for a in self.atlases):
+            self.atlases.get(old_name).rename(new_name)
 
         atlas_item.setText(new_name)
         atlas_item.setData(Qt.UserRole, new_name)
