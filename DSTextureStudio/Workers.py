@@ -14,7 +14,6 @@ from PySide6.QtCore import QObject, Signal
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
 from soulstruct.base.textures.dds import DDS
-from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, Game, GameType
@@ -305,14 +304,13 @@ class WriteWorker(QObject):
     requestCompression = Signal(str)
     finished = Signal(bool, str, Path)  # success, message
 
-    def __init__(self, new_atlases, replacements, additions, loaded_files, layouts, getPilImage, game, output):
+    def __init__(self, atlases, new_atlases, loaded_files, layouts, getPilImage, game, output):
         super().__init__()
         self._event = threading.Event()
         self._result = None
 
+        self.atlases = atlases
         self.new_atlases = new_atlases
-        self.replacements = replacements
-        self.additions = additions
         self.getPilImage = getPilImage
         self.LOADED_DCX_FILES = loaded_files
         self.LAYOUT_FILES = layouts
@@ -325,178 +323,103 @@ class WriteWorker(QObject):
         self._event.wait()
         return self._result
 
-    def buildOperations(self):
-        logger.info("Building operations map...")
+    def handle_new_atlases(self):
+        is_reuse = False
+        tasks = []
 
-        dcx_ops = {}
-
-        # new atlases
-        for parent, atlases in self.new_atlases.items():
-            if parent == "None":
+        for atlas in self.new_atlases:
+            if atlas.parent == None:
                 dcx_type = core.DCXType["Null"]
-                is_reuse = False
-                for t in atlases:
-                    if not is_reuse:
-                        _type, enc, reuse = self.promptCompression(t.name)
-                        dcx_type = core.DCXType[_type]
-                        is_reuse = reuse
-                            
-                    t.writetpf(self.output_dir, dcx_type=dcx_type, encoding=enc)
+                
+                if not is_reuse:
+                    _type, enc, reuse = self.promptCompression(atlas.name)
+                    dcx_type = core.DCXType[_type]
+                    is_reuse = reuse
+                        
+                atlas.writetpf(self.output_dir, dcx_type=dcx_type, encoding=enc)
 
             else:
-                dcx_ops.setdefault(parent, {"new_atlases": [], "atlases": {}})
-                dcx_ops[parent]["new_atlases"].extend(atlases)
+                tasks.append(atlas)
 
-        # replacements
-        for dcx_path, atlases in self.replacements.items():
-            base_name = Path(dcx_path)
-            dcx_ops.setdefault(dcx_path, {"new_atlases": [], "atlases": {}})
+        return tasks
 
-            for atlas_name, changes in atlases.items():
-                dcx_ops[dcx_path]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[dcx_path]["atlases"][atlas_name]["replacements"].update(changes)
+    def processLayout(self, dcx_path):
+        logger.info("Processing layout for: %s", dcx_path)
+        
+        layout_objs = list(self.LAYOUT_FILES[dcx_path])
 
-        # Additions
-        for dcx_path, add_data in self.additions.items():
+        layout_map = {
+            replaceTerms(Path(layout.imagePath).stem, {"_h": "", "_l": ""}): layout # atlas name to AtlasLayout objects
+            for layout in layout_objs
+        }
 
-            dcx_ops.setdefault(dcx_path, {"new_atlases": [], "atlases": {}})
-
-            additions_by_atlas = {}
-
-            for sub in add_data:
-                if sub.vanilla:
-                    continue
-
-                additions_by_atlas.setdefault(sub.parent, []).append(sub)
-
-            for atlas_name, subs in additions_by_atlas.items():
-                dcx_ops[dcx_path]["atlases"].setdefault(atlas_name, {"replacements": {}, "additions": []})
-                dcx_ops[dcx_path]["atlases"][atlas_name]["additions"].extend(subs)
-
-        # Layout handling
-        for dcx_path, data in dcx_ops.items():
-
-            if dcx_path not in self.LAYOUT_FILES:
+        for atlas in self.atlases.values():
+            additions = atlas.additions
+            if not additions:
                 continue
 
-            logger.info("Processing layout for: %s", dcx_path)
+            existing_layout = layout_map.get(atlas.name)
 
-            layout_objs = list(self.LAYOUT_FILES[dcx_path])
+            if existing_layout:
+                logger.info("Adding %i subtexture(s) to existing layout '%s'", len(additions), atlas.name)
+                existing_layout.add_subtextures(additions)
 
-            layout_map = {
-                replaceTerms(Path(layout.imagePath).stem, {"_h": "", "_l": ""}): layout # atlas name to AtlasLayout objects
-                for layout in layout_objs
-            }
+            else:
+                logger.info("Creating layout entry for '%s' with %i subtexture(s)", atlas.name, len(additions))
+                first_obj: AtlasLayout = layout_objs[0] # dummy used to fetch common info
 
-            for atlas_name, atlas_ops in data["atlases"].items():
-                additions = atlas_ops["additions"]
-                if not additions:
-                    continue
+                imgpath = AtlasLayout.getImagePath(self.game, res=first_obj.res.display, atlas_name=atlas.name)
+                entry_path = first_obj.commonPath / f"{atlas.name}.layout"
+                dims = None
+                if self.game.name == "Nightreign": # NR keeps width and height info in each .layout file's root
+                    dims = self.getPilImage(atlas.name, return_atlas=True).dimensions
 
-                existing_layout = layout_map.get(atlas_name)
+                new_layout = AtlasLayout.create(
+                    imagePath=imgpath,
+                    entryPath=entry_path,
+                    subtextures=additions,
+                    dimensions=dims
+                )
 
-                if existing_layout:
-                    logger.info("Adding %i subtexture(s) to existing layout '%s'", len(additions), atlas_name)
-                    existing_layout.add_subtextures(additions)
+                layout_objs.append(new_layout)
+                layout_map[atlas.name] = new_layout
 
-                else:
-                    logger.info("Creating layout entry for '%s' with %i subtexture(s)", atlas_name, len(additions))
-                    first_obj: AtlasLayout = layout_objs[0] # dummy used to fetch common info
-
-                    imgpath = AtlasLayout.getImagePath(self.game, res=first_obj.res.display, atlas_name=atlas_name)
-                    entry_path = first_obj.commonPath / f"{atlas_name}.layout"
-                    dims = None
-                    if self.game.name == "Nightreign": # NR keeps width and height info in each .layout file's root
-                        dims = self.getPilImage(atlas_name, return_atlas=True).dimensions
-
-                    new_layout = AtlasLayout.create(
-                        imagePath=imgpath,
-                        entryPath=entry_path,
-                        subtextures=additions,
-                        dimensions=dims
-                    )
-
-                    layout_objs.append(new_layout)
-                    layout_map[atlas_name] = new_layout
-
-            file = dcx_path.name.replace('.tpf.dcx', '.sblytbnd.dcx')
-            AtlasLayout.build(
-                layout_objs=layout_objs,
-                output=self.output_dir / file
-            )
-            logger.info("Successfully wrote file: %s", file)
-
-        logger.info("Finished building operations.")
-        logger.info("Summary of DCX operations:")
-
-        for dcx_name, data in dcx_ops.items():
-            logger.info("File: %s", dcx_name)
-
-            if data["new_atlases"]:
-                logger.info("  New Atlases: %s", [t.name for t in data['new_atlases']])
-
-            for atlas_name, ops in data["atlases"].items():
-                rep_keys = list(ops["replacements"].keys())
-                add_names = [sub.name for sub in ops["additions"]]
-
-                logger.info(
-                    "  Atlas: %s | Replacements: %s | Additions: %s",
-                    atlas_name, rep_keys, add_names)
-
-        return dcx_ops
+        file = dcx_path.name.replace('.tpf.dcx', '.sblytbnd.dcx')
+        AtlasLayout.build(
+            layout_objs=layout_objs,
+            output=self.output_dir / file
+        )
+        logger.info("Successfully wrote file: %s", file)
 
     def run(self):
         try:
-            for base_path, data in self.buildOperations().items():
-                base: TPF = deepcopy(self.LOADED_DCX_FILES[base_path])
+            for base_path, data in self.LOADED_DCX_FILES.items():
+                base: TPF = deepcopy(data)
 
-                if data["new_atlases"]:
-                    if self.game.name == "Bloodborne":
-                        for t in data["new_atlases"]:
-                            texture: TPFTexture = t.texture
-                            dds = DDS.from_bytes(texture.get_headerized_data(TPFPlatform.PC)) # dont deswizzle as image is already not swizzled
-                            swizzled = swizzle_dds_bytes_ps4(
-                                deswizzled=dds.data,
-                                dxgi_format=texture.console_info.dxgi_format,
-                                width=texture.console_info.width,
-                                height=texture.console_info.height,
-                            )
-                            texture.data = swizzled
-                            base.textures.append(texture)
-                    else:         
-                        base.textures.extend([t.texture for t in data["new_atlases"]])
+                if base_path in self.LAYOUT_FILES:
+                    self.processLayout(base_path)
+                
+                for atlas in self.handle_new_atlases(): # returns list of those with parents. Parentless files are written alone, not in a binder.
+                    if atlas.parent != base_path:
+                        continue
 
-                atlas_cache = {}
+                    atlas.add_to_TPF(base, swizzle=(self.game.name == "Bloodborne"))
 
-                for atlas_name, ops in data["atlases"].items():
-                    if atlas_name not in atlas_cache:
-                        atlas_cache[atlas_name] = self.getPilImage(atlas_name).copy()
-                    atlas_img = atlas_cache[atlas_name]
+                for atlas in self.atlases.values():
+                    if (atlas.parent != base_path) or (not atlas.modified):
+                        continue
 
-                    for add in ops["additions"]:
-                        if add.img:
-                            add.paste_into(atlas_img)
+                    compiled_image = self.getPilImage(atlas.name) # calls atlas.compileTexture() when rebuilding cache
 
-                    for sub_name, new_img in ops["replacements"].items():
-                        if sub_name != "*Self*":  # subtexture replacement
-                            st = self.getPilImage(atlas_name, return_atlas=True).fetch(sub_name) # im so sorry
-                            if not st:
-                                raise Exception(f"Could not resolve subtexture '{sub_name}' in atlas '{atlas_name}'")
-                            atlas_img.paste(new_img, (st.x, st.y))
-                        else:  # full atlas replacement
-                            atlas_img = new_img.copy()
-                            atlas_cache[atlas_name] = atlas_img
-
-                for atlas_name, atlas_img in atlas_cache.items():
                     with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
                         temp_path = tmp.name
-                        atlas_img.save(temp_path)
+                        compiled_image.save(temp_path)
                     try:
-                        texture = TPF.find_texture_stem(base, atlas_name)
+                        texture = base.find_texture_stem(atlas.name)
                         texture.replace_dds(temp_path,
-                                            dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name,
-                                            swizzle=(self.game.name == "Bloodborne"),
-                                            dimensions=atlas_img.size,
+                            dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name,
+                            swizzle=(self.game.name == "Bloodborne"),
+                            dimensions=compiled_image.size,
                         )
                     finally:
                         if os.path.exists(temp_path):

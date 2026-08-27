@@ -4,10 +4,14 @@ from textwrap import indent
 from typing import Optional, Callable
 from PIL import Image
 from pathlib import Path
+from copy import deepcopy
+from io import BytesIO
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
+from soulstruct.base.textures.dds import DDS
+from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 from soulstruct.dcx import DCXType
-from DSTextureStudio.Utilities import path_has_sequence
+from DSTextureStudio.Utilities import path_has_sequence, findLast
 from DSTextureStudio.Enums import ImageType, Game, Resolution
 import xml.etree.ElementTree as ET
 
@@ -173,12 +177,16 @@ class AtlasLayout:
 @dataclass(slots=True)
 class Atlas:
     name: str
-    parent: Path
+    parent: Optional[Path] # when None, is written as a standalone file 
 
     texture: TPFTexture
     dimensions: Optional[tuple[int, int]] = None # only needed for custom Atlases, used for writing TextureAtlas xml properties
 
     subtextures: list[SubTexture] = field(default_factory=list)
+
+    # Modifications
+    replacements: list[SubTexture|Image.Image] = field(default_factory=list)
+    additions: list[SubTexture] = field(default_factory=list)
 
     # region Properties
     @property
@@ -191,15 +199,39 @@ class Atlas:
         """Returns number of child SubTexture objects."""
         return len(self.subtextures)
 
+    @property
+    def viewable(self) -> Image.Image:
+        """Returns a viewable Image of self.texture's dds"""
+        # existing textures return due to being a valid DDS, custom are not swizzled; PC skips deswizzling
+        # this covers both PC and PS4 games unlike BytesIO(texture.data) which wouldn't work on headerless BB textures
+        dds = self.texture.get_headerized_data(TPFPlatform.PC) 
+        return Image.open(BytesIO(dds)).convert("RGBA")
+
+    @property
+    def modified(self) -> bool:
+        return (len(self.replacements) + len(self.additions)) > 0
+
+    @property
+    def modifications(self) -> dict:
+        return {
+            "Name": self.name,
+            "Additions": self.additions,
+            "Replacements": self.replacements
+        }
+    
     # region Helpers
+    def renameAttrParent(self, attr, new_name):
+        for s in getattr(self, attr):
+            if s.parent is not None:
+                s.parent = new_name
+
     def rename(self, new_name) -> bool:
         """Renames Atlas object. Returns True if successful"""
         if new_name != self.name:
             self.name = new_name
             self.texture.stem = new_name
-            for s in self.subtextures:
-                if s.parent is not None:
-                    s.parent = new_name
+            for i in ["subtextures", "additions", "replacements"]:
+                self.renameAttrParent(i, new_name)
             return True
         return False
 
@@ -208,9 +240,9 @@ class Atlas:
         """Appends a SubTexture to self list"""
         self.subtextures.append(subtexture)
 
-    def match(self, name: str) -> tuple[SubTexture, int]|tuple[None, None]:
+    def match(self, name: str, attr: str = "subtextures") -> tuple[SubTexture, int]|tuple[None, None]:
         """Helper function to find SubTexture and index from self list"""
-        for idx, sub in enumerate(self.subtextures):
+        for idx, sub in enumerate(getattr(self, attr)):
             if sub.name == name:
                 return sub,idx
         return None, None
@@ -249,6 +281,51 @@ class Atlas:
             dcx_type=dcx_type).write((output / self.name).with_suffix(".tpf"))
         logger.info("Wrote standalone file with compression '%s':\n%s", dcx_type.name, output/self.name)
 
+    def compileTexture(self) -> Image.Image:
+        """Builds new Image() from self, applying all modifications."""
+        IMG = self.viewable
+
+        for add in self.additions:
+            if add.parent != self.name or add.img is None:
+                continue
+
+            img = add.img
+            x, y = add.pos
+
+            if y + img.height > IMG.height:
+                new_height = y + img.height
+                new_img = Image.new("RGBA", (IMG.width, new_height), (0, 0, 0, 0))
+                new_img.paste(IMG, (0, 0))
+                IMG = new_img
+
+            IMG.paste(img, (x, y))
+
+        last_full_replacement = findLast(self.replacements, Image.Image)
+        if last_full_replacement is not None: # replacements contain an Image() object, entire atlas will be replaced
+            IMG = self.replacements[last_full_replacement]
+        else: # no full replacements, append subtexture replacements
+            for rep in self.replacements:
+                rep.paste_into(IMG)
+
+        return IMG
+
+    def add_to_TPF(self, _TPF: TPF, swizzle: bool = False):
+        """Adds self texture to a TPF binder."""
+        texture: TPFTexture = self.texture
+
+        if swizzle:
+            dds = DDS.from_bytes(texture.get_headerized_data(TPFPlatform.PC)) # dont deswizzle as image is already not swizzled
+            swizzled = swizzle_dds_bytes_ps4(
+                deswizzled=dds.data,
+                dxgi_format=texture.console_info.dxgi_format,
+                width=texture.console_info.width,
+                height=texture.console_info.height,
+            )
+            texture.data = swizzled
+
+        _TPF.textures.append(texture)
+
+
     def __repr__(self) -> str:
         return (
             f"Atlas(\n"
@@ -284,6 +361,9 @@ class SubTexture:
     def setpos(self, x, y):
         self.x = x
         self.y = y
+
+    def rename(self, new_name):
+        self.name = new_name
 
     def box(self, padding: int = 0) -> tuple[int, int, int, int]:
         """Return tuple of coordinates for a box to crop to this subtexture. Allows optional padding"""
