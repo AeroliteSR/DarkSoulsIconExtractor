@@ -120,7 +120,7 @@ class TextureStudio(QMainWindow):
         self.preview_label = ImageLabel("Texture Preview", fetchimg=self.getPixmap)
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setStyleSheet("border: 1px solid gray; background: #222; color: white;")
-        self.preview_label.setMinimumSize(600, 400)
+        self.preview_label.setMinimumSize(600, 425)
         right_layout.addWidget(self.preview_label)
 
         self.info_label = ExpandableLabel("Texture Info", "Texture Info")
@@ -1127,8 +1127,7 @@ class TextureStudio(QMainWindow):
         self.replace_dialog.setStyleSheet("""QLabel {qproperty-alignment: AlignCenter;} QProgressBar {text-align: center;}""")
 
         self.r_thread = QThread()
-        self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA,
-                                      self.getPilImage, self.game, output_dir)
+        self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA, self.alphaThreshold,  self.game, output_dir)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
@@ -1210,17 +1209,9 @@ class TextureStudio(QMainWindow):
 
     def updateCache(self, atlas_name):
         """Updates thumbnail cache with an atlas' image that has had all modifications compiled"""
-        atlas = None
-
-        for a in self.pending_new_atlases:
-            if a.name == atlas_name:
-                atlas = a
-                break
-
-        if atlas is None:
-            atlas = self.atlases[atlas_name]
-
-        self.thumbnail_cache[atlas_name] = atlas.compileTexture()
+        atlas = next((a for a in self.pending_new_atlases
+                      if a.name == atlas_name), None) or self.atlases[atlas_name]
+        self.thumbnail_cache[atlas_name] = atlas.compileTexture(self.alphaThreshold)
 
     def getPilImage(self, atlas_name, createDebug=False):
         """Returns rendered preview (rebuild if needed)"""
@@ -1231,9 +1222,6 @@ class TextureStudio(QMainWindow):
 
         if createDebug:
             img = createDebugGrid(img, self.atlases[atlas_name].subtextures)
-
-        if self.alphaThreshold > 0:
-            img = cleanByAlpha(img, threshold=self.alphaThreshold)
 
         return img
 
@@ -1257,7 +1245,7 @@ class TextureStudio(QMainWindow):
             img = img.copy()
             img.thumbnail(self.preview_label.size().toTuple(), Image.Resampling.LANCZOS)
 
-        return pil2Qpixmap(img)
+        return img.toqpixmap()
 
     def isModified(self, atlas_name, sub_name=None):
         """Returns True if subtexture has been modified, for recoloring its entry."""
@@ -1344,7 +1332,7 @@ class TextureStudio(QMainWindow):
         atlas_img = self.getPilImage(self.current_atlas)
         cropped_img = atlas_img.crop(st.box())
 
-        self.preview_label.setPixmap(pil2Qpixmap(cropped_img))
+        self.preview_label.setPixmap(self.getPixmap(cropped_img, resample=True))
         self.current_crop = cropped_img
         self.info_label.setText(self.formatImageInfo(name, dcx_file, cropped_img, st.pos, img_type=ImageType.Subtexture))
 

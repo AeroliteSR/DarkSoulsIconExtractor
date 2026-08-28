@@ -4,15 +4,15 @@ from textwrap import indent
 from typing import Optional, Callable
 from PIL import Image
 from pathlib import Path
-from copy import deepcopy
 from io import BytesIO
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.base.textures.dds import DDS
 from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 from soulstruct.dcx import DCXType
-from DSTextureStudio.Utilities import path_has_sequence, findLast
+from DSTextureStudio.Utilities import path_has_sequence, findLast, tupleAdd
 from DSTextureStudio.Enums import ImageType, Game, Resolution
+from DSTextureStudio.Helpers import cleanByAlpha
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
@@ -220,13 +220,13 @@ class Atlas:
         }
     
     # region Helpers
-    def renameAttrParent(self, attr, new_name):
-        for s in getattr(self, attr):
-            if s.parent is not None:
-                s.parent = new_name
-
     def rename(self, new_name) -> bool:
         """Renames Atlas object. Returns True if successful"""
+        def renameAttrParent(self, attr, new_name):
+                for s in getattr(self, attr):
+                    if s.parent is not None:
+                        s.parent = new_name
+
         if new_name != self.name:
             self.name = new_name
             self.texture.stem = new_name
@@ -281,7 +281,7 @@ class Atlas:
             dcx_type=dcx_type).write((output / self.name).with_suffix(".tpf"))
         logger.info("Wrote standalone file with compression '%s':\n%s", dcx_type.name, output/self.name)
 
-    def compileTexture(self) -> Image.Image:
+    def compileTexture(self, alpha_threshold: int = 0) -> Image.Image:
         """Builds new Image() from self, applying all modifications."""
         IMG = self.viewable
 
@@ -289,16 +289,14 @@ class Atlas:
             if add.parent != self.name or add.img is None:
                 continue
 
-            img = add.img
-            x, y = add.pos
+            abs_w, abs_h = tupleAdd([add.size, add.pos])
 
-            if y + img.height > IMG.height:
-                new_height = y + img.height
-                new_img = Image.new("RGBA", (IMG.width, new_height), (0, 0, 0, 0))
-                new_img.paste(IMG, (0, 0))
-                IMG = new_img
+            if (abs_w > IMG.width) or (abs_h > IMG.height):
+                resized = Image.new("RGBA", (max(IMG.width, abs_w), max(IMG.height, abs_h)), (0, 0, 0, 0))
+                resized.paste(IMG)
+                IMG = resized
 
-            IMG.paste(img, (x, y))
+            add.paste_into(IMG)
 
         last_full_replacement = findLast(self.replacements, Image.Image)
         if last_full_replacement is not None: # replacements contain an Image() object, entire atlas will be replaced
@@ -306,6 +304,9 @@ class Atlas:
         else: # no full replacements, append subtexture replacements
             for rep in self.replacements:
                 rep.paste_into(IMG)
+
+        if alpha_threshold > 0: # zero RGB values with alpha 0
+            IMG = cleanByAlpha(IMG, threshold=alpha_threshold)
 
         return IMG
 
@@ -333,10 +334,13 @@ class Atlas:
             f"    Parent = {self.parent}\n"
             f"    Subtexture Count = {self.count}\n"
             f"    Dimensions = {self.dimensions}\n"
+            f"    Queued Additions = {len(self.self.additions)}\n"
+            f"    Queued Replacements = {len(self.self.replacements)}\n"
             f"    Texture = \n{indent(self.texture.__repr__(), "        ")}\n" 
            # f"    Subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
         )
+    
 # region SUBTEXTURE
 @dataclass(slots=True)
 class SubTexture:
@@ -358,6 +362,10 @@ class SubTexture:
     def pos(self) -> tuple[int, int]:
         return (self.x, self.y)
 
+    @property
+    def size(self) -> tuple[int, int]:
+        return (self.width, self.height)
+
     def setpos(self, x, y):
         self.x = x
         self.y = y
@@ -369,11 +377,11 @@ class SubTexture:
         """Return tuple of coordinates for a box to crop to this subtexture. Allows optional padding"""
         return (self.x - padding, self.y - padding, self.x + self.width + padding, self.y + self.height + padding)
     
-    def paste_into(self, atlas_img: Image.Image, mask: Image.Image | None = None) -> None:
+    def paste_into(self, image: Image.Image, mask: Image.Image | None = None) -> None:
         """Pastes self into an image"""
         if self.img is None:
             raise Exception("SubTexture object does not contain an image.")
-        atlas_img.paste(self.img, self.box(), mask=mask)
+        image.paste(self.img, self.pos, mask=mask)
 
     def __repr__(self) -> str:
         return (

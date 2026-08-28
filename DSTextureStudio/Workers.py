@@ -13,7 +13,6 @@ from PySide6.QtCore import QObject, Signal
 # Soulstruct
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
-from soulstruct.base.textures.dds import DDS
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
 from DSTextureStudio.Enums import ExportMode, Game, GameType
@@ -301,19 +300,19 @@ class ExtractWorker(QObject):
         self.finished.emit(True, self.output_dir)
 
 class WriteWorker(QObject):
-    requestCompression = Signal(str)
-    finished = Signal(bool, str, Path)  # success, message
+    requestCompression = Signal(str) # file name
+    finished = Signal(bool, str, Path)  # success, message, output location
 
-    def __init__(self, atlases, new_atlases, loaded_files, layouts, getPilImage, game, output):
+    def __init__(self, atlases, new_atlases, loaded_files, layouts, alphaThreshold, game, output):
         super().__init__()
         self._event = threading.Event()
         self._result = None
 
         self.atlases = atlases
         self.new_atlases = new_atlases
-        self.getPilImage = getPilImage
         self.LOADED_DCX_FILES = loaded_files
         self.LAYOUT_FILES = layouts
+        self.alphaThreshold = alphaThreshold
         self.game = game
         self.output_dir = output
 
@@ -372,7 +371,7 @@ class WriteWorker(QObject):
                 entry_path = first_obj.commonPath / f"{atlas.name}.layout"
                 dims = None
                 if self.game.name == "Nightreign": # NR keeps width and height info in each .layout file's root
-                    dims = self.getPilImage(atlas.name, return_atlas=True).dimensions
+                    dims = self.atlases[atlas.name].dimensions
 
                 new_layout = AtlasLayout.create(
                     imagePath=imgpath,
@@ -409,7 +408,7 @@ class WriteWorker(QObject):
                     if (atlas.parent != base_path) or (not atlas.modified):
                         continue
 
-                    compiled_image = self.getPilImage(atlas.name) # calls atlas.compileTexture() when rebuilding cache
+                    compiled_image = atlas.compileTexture(self.alphaThreshold)
 
                     with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
                         temp_path = tmp.name
