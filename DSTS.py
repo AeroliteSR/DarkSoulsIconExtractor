@@ -265,35 +265,7 @@ class TextureStudio(QMainWindow):
     def createDelta(self):
         self.checkOodleDLL()
 
-        def check_process(open_path):
-            try:
-                message, data = self.queue.get_nowait()
-            except Empty:
-                if not self.process.is_alive():
-                    self.timer.stop()
-                    self.progress.close()
-
-                    showError("Delta process exited unexpectedly.")
-
-                return
-
-            self.timer.stop()
-            self.progress.close()
-
-            self.process.join()
-            self.process = None
-
-            if message == 'error':
-                showError(data)
-
-            if message == "finished":
-                self.extractionDone(saved_path=open_path)
-
-        if self.hasPendingChanges():
-            showError("Current file has no pending changes!")
-            return
-
-        if not self.game.type != GameType.MODERN:
+        if self.game.type != GameType.MODERN:
             showError("This feature is only for modern games for now. Sorry!")
             return
 
@@ -311,39 +283,25 @@ class TextureStudio(QMainWindow):
 
         match dlg.selected():
             case 0: # from self mods
+                if not self.hasPendingChanges():
+                    showError("Current file has no pending changes!")
+                    return
+                
                 mode = DeltaMode.SELF
-                file_path, try_lyt = None, None
+                file_path = None
 
             case 1: # diff against external file
                 mode = DeltaMode.DIFF
-                file_path = Path(QFileDialog.getOpenFileName(self, "Select Vanilla File", "", "Texture Containers (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
+                file_path = Path(QFileDialog.getOpenFileName(self, "Select Vanilla Layout File", "", "Shoebox Layout Files (*.sblytbnd.dcx);;All Files (*.*)")[0])
                 if not file_path or file_path == BLANK_PATH:
-                    logger.warning("%s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", file_path.name)
-                    return
-
-                try_lyt = file_path.parent / file_path.name.replace('.tpf', '.sblytbnd')
-                if not try_lyt.exists():
-                    layout = Path(QFileDialog.getOpenFileName(None, "Navigate to corresponding sblytbnd.dcx", "", "Layout Files (*.sblytbnd.dcx)")[0])
-                    if not (layout != BLANK_PATH and layout.exists()):
-                        logger.warning("Layout file for %s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", try_lyt.name)
-                        return              
-                                
-            
+                    logger.warning("%s is either an invalid path or wasn't returned on prompt. Delta creation aborted.", file_path.name)
+                    return          
+                                    
         output = Path(QFileDialog.getSaveFileName(self, "Save As", "", "Delta Patches (*.delta)")[0])
 
-        self.progress = ProcessingBar("Generating Delta...")
-        self.queue = Queue()
+        Atlas.generateDeltaFile(mode, list(self.atlases.values()), None, file_path, output)
+        self.extractionDone(saved_path=output.parent)
 
-        self.process = Process(
-            target=make_delta_process,
-            args=(mode, list(self.atlases.values()), None, (file_path, try_lyt), output, self.queue)
-        )
-        self.process.start()
-
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(lambda: check_process(output.parent)) 
-        self.timer.start(100)
-        
     def mergeDelta(self):
         if self.atlas_list.count() == 0:
             showError("No files loaded!")
@@ -795,7 +753,7 @@ class TextureStudio(QMainWindow):
             flag_half=half
         )
 
-        atlas_obj.add(sub)
+        #atlas_obj.add(sub)
         atlas_obj.additions.append(sub)
 
         self.updateCache(atlas_name)
@@ -1340,7 +1298,7 @@ class TextureStudio(QMainWindow):
         img = self.thumbnail_cache[atlas_name]
 
         if createDebug:
-            img = createDebugGrid(img, self.atlases[atlas_name].subtextures)
+            img = createDebugGrid(img, self.atlases[atlas_name].allSubs())
 
         return img
 
@@ -1418,7 +1376,7 @@ class TextureStudio(QMainWindow):
         # Load subtextures
         self.subtexture_list.blockSignals(True)
         self.subtexture_list.clear()
-        for sub in self.atlases.get(atlas_name).subtextures:
+        for sub in self.atlases.get(atlas_name).allSubs():
             if self.btn_hideBlankIcons.isChecked() and sub.blank:
                 continue
             name = sub.name

@@ -10,13 +10,12 @@ from PIL import Image
 import threading
 # GUI
 from PySide6.QtCore import QObject, Signal
-from multiprocessing import Queue
 # Soulstruct
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
-from soulstruct.dcx import core
+from soulstruct.dcx import core, oodle
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
-from DSTextureStudio.Enums import ExportMode, Game, GameType, DeltaMode
+from DSTextureStudio.Enums import ExportMode, Game, GameType
 from DSTextureStudio.Helpers import createDebugGrid
 from DSTextureStudio.log_utils import format_exc_clean
 from DSTextureStudio.Utilities import replaceTerms, loadJson
@@ -51,6 +50,7 @@ class LoadWorker(QObject):
             self.finished.emit({}, {}, {}, format_exc_clean())
 
     def handleUnpack(self, path):
+        oodle.LOAD_DLL()
         if self.game.type == GameType.PS:
             try:
                 tex,_ = core.decompress(path)
@@ -121,7 +121,7 @@ class LoadWorker(QObject):
 
                 logger.info("Successfully parsed SB layout binder with %s entries", len(atlas_layouts))
 
-                for name, atlas in Atlas.from_layouts(textures, atlas_layouts, _file):
+                for name, atlas in Atlas.parse(textures, atlas_layouts, _file):
                     atlases[name] = atlas           
 
             elif isinstance(file, Path):
@@ -402,12 +402,4 @@ class WriteWorker(QObject):
 
         except Exception:
             self.finished.emit(False, format_exc_clean(), self.output_dir)
-
-def make_delta_process(mode: DeltaMode, source: Path, source_lyt: Path|None, vanilla: tuple[Path, Path], output: Path, queue: Queue):
-    """Note to self: do NOT try to use a worker for the delta process. it interacts fucky wucky with the progress bar"""
-    try:
-        Atlas.generateDeltaFile(mode, source, source_lyt, vanilla, output)
-        queue.put(("finished", None))
-    except Exception:
-        queue.put(("error", format_exc_clean()))
 

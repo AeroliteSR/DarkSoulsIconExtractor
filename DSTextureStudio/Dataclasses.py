@@ -6,6 +6,7 @@ from PIL import Image
 from pathlib import Path
 from io import BytesIO
 import struct
+from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.base.textures.dds import DDS
@@ -56,6 +57,8 @@ class AtlasLayout:
 
     @classmethod
     def from_binder(cls, binder: Binder|Path) -> list["AtlasLayout"]:
+        oodle.LOAD_DLL()
+
         if isinstance(binder, Path):
             binder = Binder(binder)
 
@@ -95,6 +98,7 @@ class AtlasLayout:
         layout_objs - list of all loaded AtlasLayouts to be added as entries to the Binder
 
         output - where to write dcx to"""
+        oodle.LOAD_DLL()
 
         binder = Binder(
             version=BinderVersion.V4,
@@ -159,7 +163,7 @@ class AtlasLayout:
                 imgpath = r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
             case "Armored Core 6":
                 imgpath = r"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
-            case _:
+            case _: # ER/SDT
                 imgpath = r"{atlas_name}.png"
 
         return imgpath.format(**kwargs)
@@ -180,7 +184,7 @@ class Atlas:
     name: str
     parent: Optional[Path] # when None, is written as a standalone file 
 
-    texture: TPFTexture|Image.Image # in practice this should always be TPFTexture. Image is allowed for making Deltas
+    texture: Optional[TPFTexture|Image.Image] = None # Image is allowed for making Deltas
     dimensions: Optional[tuple[int, int]] = None # only needed for custom Atlases, used for writing TextureAtlas xml properties
 
     subtextures: list[SubTexture] = field(default_factory=list)
@@ -202,7 +206,8 @@ class Atlas:
 
     @property
     def filename(self) -> str:
-        return self.parent.name
+        name = self.parent.name
+        return name[:name.find('.')] # remove all extensions so that eg "01_common.sblytbnd.dcx" == "01_common.tpf.dcx"
     
     @property
     def viewable(self) -> Image.Image:
@@ -273,9 +278,11 @@ class Atlas:
         return None, None
 
     def fetch(self, name: str) -> SubTexture|None:
-        """Returns SubTexture object of a certain name belonging to parent Atlas"""
-        sub,_ = self.match(name)
-        return sub if sub is not None else None
+        """Like Atlas.match but searches globally with self.allSubs()"""
+        for sub in self.allSubs():
+            if sub.name == name:
+                return sub
+        return None
     
     def subrename(self, name: str, new_name: str) -> None:
         """Renames SubTextures of a certain name from the Atlas."""
@@ -299,7 +306,7 @@ class Atlas:
     def update(self, atlas: Atlas):
         """Update self modifications against another Atlas object by finding diffs."""
         for sub in atlas.subtextures:
-            if self.fetch(sub.name) is None: # is unique to updater/delta; addition
+            if self.match(sub.name)[0] is None: # is unique to updater/delta; addition
                 target = self.additions
             else:
                 target = self.replacements
@@ -312,14 +319,33 @@ class Atlas:
                 sub.parent = atlas.name
                 sub.image = atlas.texture.crop(sub.box())
 
-            if target == self.additions: # needs to be registered in subtextures if addition
-                self.add(sub)
-
             target.append(sub)
 
     # region Creating
     @classmethod
-    def from_layouts(cls, textures: list[TPFTexture], layouts: list[AtlasLayout], parent_file: Path):
+    def from_layouts(cls, layouts: list[AtlasLayout], parent: Path):
+        """Yields textureless "empty" Atlas objects from shoebox layouts."""
+        for layout in layouts:
+            yield Atlas(
+                name=layout.name,
+                parent=parent,
+                subtextures=[
+                    SubTexture(
+                        name=Path(sub.get("name")).stem,
+                        parent=layout.name,
+                        x=int(sub.get("x")),
+                        y=int(sub.get("y")),
+                        width=int(sub.get("width")),
+                        height=int(sub.get("height")),
+                        blank=False,
+                        vanilla=True,
+                    )
+                    for sub in layout.iter_subtextures()
+                ]
+            )
+
+    @classmethod
+    def parse(cls, textures: list[TPFTexture], layouts: list[AtlasLayout], parent_file: Path):
         """Yields tuple[atlas.name, Atlas] for a list of Atlas objects built from TPFTextures and AtlasLayouts"""
         layout_lookup = {
             Path(atlas.imagePath).stem: atlas
@@ -445,8 +471,9 @@ class Atlas:
         )
 
     @staticmethod
-    def generateDeltaFile(mode: DeltaMode, source: Path|list[Atlas], layout: Optional[Path], vanilla: tuple[Path,Path], output: Path):
+    def generateDeltaFile(mode: DeltaMode, source: Path|list[Atlas], source_layout: Optional[Path], vanilla: Path, output: Path):
         """Generates a .delta file containing diffs between a modded and vanilla file."""
+        oodle.LOAD_DLL()
         deltas = []
 
         match mode:
@@ -460,16 +487,15 @@ class Atlas:
                 Atlas.writeDeltaFile(deltas, output)
 
             case DeltaMode.DIFF:
-                if isinstance(source, Path):
-                    assert layout is not None
+                if isinstance(source, Path): # else, source is list of Atlases
+                    assert source_layout is not None
                     source_tpf = TPF(source)
-                    source_layouts = AtlasLayout.from_binder(layout)
+                    source_layouts = AtlasLayout.from_binder(source_layout)
                     source = Atlas.from_layouts(source_tpf.textures, source_layouts, source)
 
-                vanilla_bnd, vanilla_lyt = vanilla
-                vanilla_layouts = AtlasLayout.from_binder(vanilla_lyt)
-                vanilla_atlases = {name: atlas for name, atlas in
-                                Atlas.from_layouts(TPF(vanilla_bnd).textures, vanilla_layouts, vanilla_bnd)
+                vanilla_layouts = AtlasLayout.from_binder(vanilla)
+                vanilla_atlases = {atlas.name: atlas for atlas in
+                                Atlas.from_layouts(vanilla_layouts, vanilla)
                 }
 
                 for atlas in source:
