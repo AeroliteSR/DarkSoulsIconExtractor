@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import QFileDialog
 from DSTextureStudio.Enums import Game
-from DSTextureStudio.GUI import gameTypeDialog, InvalidImagePrompt
+from DSTextureStudio.GUI import gameTypeDialog, RadioButtonDialog
 from DSTextureStudio.Utilities import path_has_sequence, checkBlockSize, align_up, tupleAdd
 import tempfile
 import logging
@@ -132,7 +132,17 @@ def validateImageForSwizzle(img: Image.Image, parent_dims: tuple = (0, 0), paddi
     if checkBlockSize(img=final_dims, align=8):
         return img
 
-    dlg = InvalidImagePrompt()
+    dlg = RadioButtonDialog(
+        title="Invalid Texture",
+        text="Swizzled textures should have dimensions divisible by 8.\nWhat would you like to do with this texture?",
+        options={
+            0: "Cancel Addition",
+            1: "Ignore Warning",
+            2: "Resize Image",
+            3: "Pad Image With Alpha",
+            4: "Choose A New Image"
+        }
+    )
     if not dlg.exec():
         return None
 
@@ -144,21 +154,21 @@ def validateImageForSwizzle(img: Image.Image, parent_dims: tuple = (0, 0), paddi
     )
 
     match dlg.selected():
-        case InvalidImagePrompt.IGNORE:
+        case 0:
             return img
 
-        case InvalidImagePrompt.CANCEL:
+        case 1:
             return None
 
-        case InvalidImagePrompt.RESIZE:
+        case 2:
             logger.info("Resampling image to dimensions: %s", required)
             return img.resize(required, Image.Resampling.LANCZOS)
 
-        case InvalidImagePrompt.PAD:
+        case 3:
             logger.info("Padding image to dimensions: %s", required)
             return padImage(img, required)
 
-        case InvalidImagePrompt.NEW:
+        case 4:
             filename, _ = QFileDialog.getOpenFileName(None, "Select Image", "", "Image Files (*.png *.dds *.jpg *.jpeg *.webm);;All Files (*.*)",)
             if not filename:
                 return None

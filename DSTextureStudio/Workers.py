@@ -10,12 +10,13 @@ from PIL import Image
 import threading
 # GUI
 from PySide6.QtCore import QObject, Signal
+from multiprocessing import Queue
 # Soulstruct
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
-from DSTextureStudio.Enums import ExportMode, Game, GameType
+from DSTextureStudio.Enums import ExportMode, Game, GameType, DeltaMode
 from DSTextureStudio.Helpers import createDebugGrid
 from DSTextureStudio.log_utils import format_exc_clean
 from DSTextureStudio.Utilities import replaceTerms, loadJson
@@ -84,8 +85,8 @@ class LoadWorker(QObject):
             
             yield texture
 
-    def generateTextDict(self, dcx_path, percent):
-        textures_dict: dict = {}
+    def generateTextureList(self, dcx_path, percent) -> list[TPFTexture]:
+        textures_list = []
         self.progress.emit(percent, f"Unpacking {dcx_path.stem}...")
 
         paths = []
@@ -97,11 +98,11 @@ class LoadWorker(QObject):
         for path in paths:
             logger.info("Getting texture data for file: %s", path)
             for texture in self.handleUnpack(path):
-                textures_dict[texture.stem] = texture
+                textures_list.append(texture)
 
-        logger.info("Generated texture dictionary with %i entries", len(textures_dict))
+        logger.info("Generated texture dictionary with %i entries", len(textures_list))
         self.progress.emit(percent, f"Loaded {dcx_path.stem}")
-        return textures_dict
+        return textures_list
 
     def processModern(self):
         atlases: dict[str, Atlas] = {}
@@ -112,54 +113,23 @@ class LoadWorker(QObject):
             percent = int(f_idx / total_files * 100 - 1)
             if isinstance(file, dict):
                 _file: Path = file['file']
-                layout_path = file['layout']
-                textures_dict: dict = self.generateTextDict(_file, percent)
+                textures = self.generateTextureList(_file, percent)
 
                 self.progress.emit(percent, "Parsing layout binder...")
-                atlas_layouts = AtlasLayout.from_binder(layout_path)
+                atlas_layouts = AtlasLayout.from_binder(file['layout'])
                 self.LAYOUT_DATA[_file] = atlas_layouts
 
                 logger.info("Successfully parsed SB layout binder with %s entries", len(atlas_layouts))
 
-                layout_lookup = {
-                    Path(atlas.imagePath).stem: atlas
-                    for atlas in atlas_layouts
-                }
-
-                for filename, texture in textures_dict.items():
-                    texture_atlas = layout_lookup.get(filename)
-
-                    if texture_atlas is None:
-                        logger.debug("Creating Atlas object with no SubTextures for Texture with no Layout: '%s'", filename)
-                        subtextures = []
-                    else:
-                        subtextures = [
-                            SubTexture(
-                                name=Path(sub.get("name")).stem,
-                                parent=filename,
-                                x=int(sub.get("x")),
-                                y=int(sub.get("y")),
-                                width=int(sub.get("width")),
-                                height=int(sub.get("height")),
-                                blank=False,
-                                vanilla=True,
-                            )
-                            for sub in texture_atlas.iter_subtextures()
-                        ]
-
-                    atlases[filename] = Atlas(
-                        name=filename,
-                        texture=texture,
-                        parent=file['file'],
-                        subtextures=subtextures,
-                    )
+                for name, atlas in Atlas.from_layouts(textures, atlas_layouts, _file):
+                    atlases[name] = atlas           
 
             elif isinstance(file, Path):
-                textures_dict: dict = self.generateTextDict(file, percent)
+                textures = self.generateTextureList(file, percent)
                 # add any textures that were not included in the layout
-                for name, texture in textures_dict.items():
-                    if name not in atlases:
-                        atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
+                for texture in textures:
+                    name = texture.stem
+                    atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[]) # no layout info since single textures go to atlases
                 logger.info("Successfully loaded %i atlases with no layouts.", len(atlases))
 
         logger.info("Load Worker process completed succesfully!")
@@ -172,9 +142,10 @@ class LoadWorker(QObject):
 
         for f_idx, file in enumerate(self.file_mappings, 1):
             percent = int(f_idx / total_files * 100 - 1)
-            textures_dict: dict = self.generateTextDict(file, percent)
+            textures = self.generateTextureList(file, percent)
 
-            for name, texture in textures_dict.items():
+            for texture in textures:
+                name = texture.stem
                 atlases[name] = Atlas(name=name, texture=texture, parent=file, subtextures=[])
                 dds = texture.get_dds()
                 image = Image.open(BytesIO(dds.to_bytes())).convert("RGBA")
@@ -431,3 +402,12 @@ class WriteWorker(QObject):
 
         except Exception:
             self.finished.emit(False, format_exc_clean(), self.output_dir)
+
+def make_delta_process(mode: DeltaMode, source: Path, source_lyt: Path|None, vanilla: tuple[Path, Path], output: Path, queue: Queue):
+    """Note to self: do NOT try to use a worker for the delta process. it interacts fucky wucky with the progress bar"""
+    try:
+        Atlas.generateDeltaFile(mode, source, source_lyt, vanilla, output)
+        queue.put(("finished", None))
+    except Exception:
+        queue.put(("error", format_exc_clean()))
+

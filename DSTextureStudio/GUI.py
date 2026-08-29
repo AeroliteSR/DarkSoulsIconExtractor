@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox, QButtonGroup, QRadioButton,
-QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout)
-from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QRect, QPoint, QTimer
+QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout, QGridLayout, QProgressDialog)
+from PySide6.QtCore import Qt, QPropertyAnimation, QRect, QPoint, QTimer
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP, SubtexturePrefix
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
@@ -572,44 +572,23 @@ class CompressionPrompt(QDialog):
     def get_result(self):
         return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
    
-class InvalidImagePrompt(QDialog):
-    CANCEL = 0
-    IGNORE = 1
-    RESIZE = 2
-    PAD = 3
-    NEW = 4
-
-    def __init__(self, parent=None):
+class RadioButtonDialog(QDialog):
+    def __init__(self, title, text, options: dict, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("Invalid Texture")
+        self.setWindowTitle(title)
 
         layout = QVBoxLayout(self)
 
         self.group = QButtonGroup(self)
 
-        info = QLabel("Swizzled textures should have dimensions divisible by 8.\nWhat would you like to do with this texture?")
-
-        cancel = QRadioButton("Cancel Addition")
-        ignore = QRadioButton("Ignore Warning")
-        resize = QRadioButton("Resize Image")
-        pad = QRadioButton("Pad Image With Alpha")
-        new = QRadioButton("Choose A New Image")
-
-        self.group.addButton(cancel, self.CANCEL)
-        self.group.addButton(ignore, self.IGNORE)
-        self.group.addButton(resize, self.RESIZE)
-        self.group.addButton(pad, self.PAD)
-        self.group.addButton(new, self.NEW)
-
-        cancel.setChecked(True)
-
+        info = QLabel(text)
         layout.addWidget(info)
-        layout.addWidget(cancel)
-        layout.addWidget(ignore)
-        layout.addWidget(resize)
-        layout.addWidget(pad)
-        layout.addWidget(new)
+
+        for _id, text in options.items():
+            btn = QRadioButton(text)
+            self.group.addButton(btn, _id)
+            layout.addWidget(btn)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -620,6 +599,81 @@ class InvalidImagePrompt(QDialog):
     def selected(self):
         return self.group.checkedId()
 
+class CreateDeltaPrompt(QDialog):
+    # unused class for now. Maybe one day use this for an auto-merger like I did for FMGs
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Create Delta")
+        self.resize(700, 220)
+
+        layout = QVBoxLayout(self)
+
+        grid = QGridLayout()
+        layout.addLayout(grid)
+
+        self.source_lyt_input = self.addInputRow(grid, 1, "Source Layout:")
+        self.source_input = self.addInputRow(grid, 0, "Source:", self.source_lyt_input)
+        self.vanilla_lyt_input = self.addInputRow(grid, 3, "Vanilla Layout:")
+        self.vanilla_input = self.addInputRow(grid, 2, "Vanilla:", self.vanilla_lyt_input)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+
+        patch_button = QPushButton("Create")
+        cancel_button = QPushButton("Cancel")
+
+        buttons.addWidget(patch_button)
+        buttons.addWidget(cancel_button)
+
+        layout.addLayout(buttons)
+
+        patch_button.clicked.connect(self.validate)
+        cancel_button.clicked.connect(self.reject)
+
+    def addInputRow(self, layout, row, label, assoc=None):
+        layout.addWidget(QLabel(label), row, 0)
+
+        edit = QLineEdit()
+        layout.addWidget(edit, row, 1)
+
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(lambda: self.browse(edit, assoc))
+        layout.addWidget(browse, row, 2)
+
+        return edit
+
+    def browse(self, edit, associated=None):
+        filename = QFileDialog.getOpenFileName(self, "Select File", "", "Texture Containers (*tpf.dcx *.tpf);;All Files (*)")[0]
+
+        if filename:
+            edit.setText(filename)
+
+            if associated is not None:
+                filepath = Path(filename)
+                try_lyt = filepath.parent / filepath.name.replace('.tpf', '.sblytbnd')
+                if try_lyt.exists():
+                    associated.setText(str(try_lyt))
+
+
+    def validate(self):
+        source = Path(self.source_input.text().strip())
+        source_lyt = Path(self.source_lyt_input.text().strip())
+        vanilla = Path(self.vanilla_input.text().strip())
+        vanilla_lyt = Path(self.vanilla_lyt_input.text().strip())
+
+        for path in (source, source_lyt, vanilla, vanilla_lyt):
+            if not path.is_file():
+                showError(f"'{path}' is not a valid file.")
+                return
+
+        self.accept()
+
+    def get_result(self):
+        return (Path(self.source_input.text().strip()),
+                Path(self.source_lyt_input.text().strip()),
+                Path(self.vanilla_input.text().strip()),
+                Path(self.vanilla_lyt_input.text().strip()))
 
 class ImageLabel(QLabel):
     def __init__(self, text, fetchimg, parent=None):
@@ -907,6 +961,16 @@ class TextureListWidget(QListWidget):
     def repositionButton(self, margin=10):
         self.add_button.move(self.width() - self.add_button.width() - margin, self.height() - self.add_button.height() - margin)
 
+class ProcessingBar(QProgressDialog):
+    def __init__(self, title, parent=None):
+        super().__init__(title, None, 0, 0, parent)
+        self.setWindowTitle("Processing")
+        self.setWindowModality(Qt.ApplicationModal)
+        self.setCancelButton(None)
+        self.setMinimumDuration(0)
+        self.setMinimumWidth(300)
+        self.show()
+        self.setStyleSheet("""QLabel {qproperty-alignment: AlignCenter;} QProgressBar {text-align: center;}""")
 
 def showError(text, title="Error", _type=QMessageBox.Critical):
     """Error popup with specified text"""

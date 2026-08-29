@@ -1,7 +1,6 @@
 from __future__ import annotations
 # Basic Modules
 import sys, shutil
-from io import BytesIO
 from pathlib import Path
 from collections import defaultdict
 from PIL import Image, UnidentifiedImageError
@@ -10,6 +9,8 @@ from webbrowser import open_new_tab
 from typing import Optional
 from tempfile import NamedTemporaryFile
 # GUI
+from multiprocessing import Process, Queue
+from queue import Empty
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu, QLineEdit)
 from PySide6.QtGui import QIcon, QDesktopServices, QAction
@@ -21,11 +22,11 @@ from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
-from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType
-from DSTextureStudio.Helpers import checkGame, pil2Qpixmap, getFreeSpace, createBlankImage, createDebugGrid, cleanByAlpha, getPngSize, validateImageForSwizzle
-from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
+from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode
+from DSTextureStudio.Helpers import checkGame, getFreeSpace, createBlankImage, createDebugGrid, getPngSize, validateImageForSwizzle
+from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker, make_delta_process
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
-showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt)
+showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt, ProcessingBar, RadioButtonDialog)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
 from DSTextureStudio.Utilities import replaceTerms, loadJson, getDSTSdir, findLast
@@ -174,8 +175,8 @@ class TextureStudio(QMainWindow):
         dump.addAction(createAction("Atlases", lambda: self.dumpTextures(mode=ExportMode.ATLAS)))
         dump.addAction(createAction("Subtextures", lambda: self.dumpTextures(mode=ExportMode.SUBTEXTURE)))
         self.file_menu.addSeparator()
-        self.file_menu.addAction(createAction("Clear", self.clear))
-        self.file_menu.addAction(createAction("Exit", self.close))
+        self.file_menu.addAction(createAction("Undo All Changes", self.undoChanges))
+        self.file_menu.addAction(createAction("Clear Workspace", self.clear))
 
         self.settings_menu = menu.addMenu("Settings")
 
@@ -204,6 +205,11 @@ class TextureStudio(QMainWindow):
         self.settings_menu.addAction(self.btn_atlasGrid)
         self.settings_menu.addSeparator()
         self.settings_menu.addAction(self.btn_alphaThreshold)
+
+        self.tools_menu = menu.addMenu("Tools")
+        deltapatch = self.tools_menu.addMenu("Merging")
+        deltapatch.addAction(createAction("Generate Delta", self.createDelta))
+        deltapatch.addAction(createAction("Import Delta", self.mergeDelta))
         
         self.help_menu = menu.addMenu("Help")
         self.help_menu.addAction(createAction("Settings", lambda: QMessageBox.information(self, "Settings Info", "<b>Custom Names:</b><br> When enabled, this setting replaces" \
@@ -248,6 +254,129 @@ class TextureStudio(QMainWindow):
             item = widget.item(i)
             item.setHidden(text not in item.text().lower())
 
+    def undoChanges(self):
+        self.pending_new_atlases = []
+        for a in self.atlases.values():
+            a.clearChanges()
+
+        self.atlas_list.setCurrentRow(0)
+        self.showAtlas(self.atlas_list.currentItem())
+
+    def createDelta(self):
+        self.checkOodleDLL()
+
+        def check_process(open_path):
+            try:
+                message, data = self.queue.get_nowait()
+            except Empty:
+                if not self.process.is_alive():
+                    self.timer.stop()
+                    self.progress.close()
+
+                    showError("Delta process exited unexpectedly.")
+
+                return
+
+            self.timer.stop()
+            self.progress.close()
+
+            self.process.join()
+            self.process = None
+
+            if message == 'error':
+                showError(data)
+
+            if message == "finished":
+                self.extractionDone(saved_path=open_path)
+
+        if self.hasPendingChanges():
+            showError("Current file has no pending changes!")
+            return
+
+        if not self.game.type != GameType.MODERN:
+            showError("This feature is only for modern games for now. Sorry!")
+            return
+
+        dlg = RadioButtonDialog(
+            "Delta Options",
+            "Choose delta creation mode.",
+            options={
+                0: "Create Delta from queued modifications",
+                1: "Create Delta from diffs against a vanilla file"
+            }
+        )
+
+        if not dlg.exec():
+            return
+
+        match dlg.selected():
+            case 0: # from self mods
+                mode = DeltaMode.SELF
+                file_path, try_lyt = None, None
+
+            case 1: # diff against external file
+                mode = DeltaMode.DIFF
+                file_path = Path(QFileDialog.getOpenFileName(self, "Select Vanilla File", "", "Texture Containers (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
+                if not file_path or file_path == BLANK_PATH:
+                    logger.warning("%s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", file_path.name)
+                    return
+
+                try_lyt = file_path.parent / file_path.name.replace('.tpf', '.sblytbnd')
+                if not try_lyt.exists():
+                    layout = Path(QFileDialog.getOpenFileName(None, "Navigate to corresponding sblytbnd.dcx", "", "Layout Files (*.sblytbnd.dcx)")[0])
+                    if not (layout != BLANK_PATH and layout.exists()):
+                        logger.warning("Layout file for %s is either an invalid path or wasn't returned on prompt. Atlases will not be processed.", try_lyt.name)
+                        return              
+                                
+            
+        output = Path(QFileDialog.getSaveFileName(self, "Save As", "", "Delta Patches (*.delta)")[0])
+
+        self.progress = ProcessingBar("Generating Delta...")
+        self.queue = Queue()
+
+        self.process = Process(
+            target=make_delta_process,
+            args=(mode, list(self.atlases.values()), None, (file_path, try_lyt), output, self.queue)
+        )
+        self.process.start()
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(lambda: check_process(output.parent)) 
+        self.timer.start(100)
+        
+    def mergeDelta(self):
+        if self.atlas_list.count() == 0:
+            showError("No files loaded!")
+            return
+        
+        file_path = Path(QFileDialog.getOpenFileName(self, "Select File", "", "Delta Patches (*.delta)")[0])
+        if not file_path or file_path == BLANK_PATH:
+            return
+
+        atlases = Atlas.readDeltaFile(file_path)
+
+        for atlas in atlases:
+            if atlas.name not in self.atlases:
+                dims = atlas.texture.size
+                with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                    temp_path = tmp.name
+                    atlas.texture.save(temp_path)
+
+                blank = TPFTexture(stem=atlas.name, mipmap_count=1, format=102, platform=TPFPlatform.PC) # TODO: don't assume?
+                blank.replace_dds(temp_path, dds_format="BC7_UNORM")
+
+                atlas.texture = blank 
+                atlas.dimensions = dims
+                self.pending_new_atlases.append(atlas)
+                continue
+
+            existing = self.atlases[atlas.name]
+            existing.update(atlas)
+
+        self.atlas_list.setCurrentRow(0)
+        self.showAtlas(self.atlas_list.currentItem())
+        self.reloadHighlighting()
+
     def openSubtextureMenu(self, position: QPoint):
         sender = self.sender()
 
@@ -287,7 +416,6 @@ class TextureStudio(QMainWindow):
                 return
 
             atlas_name = item.data(Qt.UserRole)
-            dcx_file = item.data(Qt.UserRole + 1)
 
             modify = self.isModified(atlas_name)
             if modify == Modified.FALSE:
@@ -662,9 +790,9 @@ class TextureStudio(QMainWindow):
             width=w,
             height=h,
             parent=atlas_name,
-            img=img,
+            image=img,
             vanilla=False,
-            half=half
+            flag_half=half
         )
 
         atlas_obj.add(sub)
@@ -740,7 +868,7 @@ class TextureStudio(QMainWindow):
             files = [file]
         else:
             if not dirmode:
-                file_path = Path(QFileDialog.getOpenFileName(self, "Select File", "", "Texture Files (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
+                file_path = Path(QFileDialog.getOpenFileName(self, "Select File", "", "Texture Containers (*.tpf.dcx *.tpf);;All Files (*.*)")[0])
                 if not file_path or file_path == BLANK_PATH:
                     return
                 files = [file_path] if file_path else []
@@ -955,8 +1083,6 @@ class TextureStudio(QMainWindow):
             msg.addButton(QMessageBox.Ok)
             _open.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(saved_path))))
             msg.exec()
-        else:
-            QMessageBox.critical(self, "Error", f"Tasks Failed!")
 
     def toggleCustomNames(self):
         """Replaces displaying text for QListWidgetItems with the mapped ones whilst retaining the original in UserRole"""
@@ -1070,7 +1196,7 @@ class TextureStudio(QMainWindow):
                     y=y,
                     width=w,
                     height=h,
-                    img=new_img,
+                    image=new_img,
                     parent=atlas.name,
                 )
             )
@@ -1117,14 +1243,7 @@ class TextureStudio(QMainWindow):
         if not output_dir:
             return
     
-        self.replace_dialog = QProgressDialog("Applying changes...", None, 0, 0, self)
-        self.replace_dialog.setWindowTitle("Processing")
-        self.replace_dialog.setWindowModality(Qt.ApplicationModal)
-        self.replace_dialog.setCancelButton(None)
-        self.replace_dialog.setMinimumDuration(0)
-        self.replace_dialog.setMinimumWidth(300)
-        self.replace_dialog.show()
-        self.replace_dialog.setStyleSheet("""QLabel {qproperty-alignment: AlignCenter;} QProgressBar {text-align: center;}""")
+        self.replace_dialog = ProcessingBar("Applying changes...")
 
         self.r_thread = QThread()
         self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA, self.alphaThreshold,  self.game, output_dir)
@@ -1247,11 +1366,27 @@ class TextureStudio(QMainWindow):
 
         return img.toqpixmap()
 
+    def reloadHighlighting(self, only_current: bool = False):
+        if only_current:
+            items = [self.atlas_list.currentItem()]
+        else:
+            items = [self.atlas_list.item(x) for x in range(self.atlas_list.count())]
+
+        for item in items:
+            match self.isModified(item.data(Qt.UserRole), None):
+                case Modified.ADDED:
+                    item.setForeground(Qt.green)
+                case Modified.REPLACED:
+                    item.setForeground(Qt.yellow)
+
     def isModified(self, atlas_name, sub_name=None):
         """Returns True if subtexture has been modified, for recoloring its entry."""
         atlas: Atlas = self.atlases.get(atlas_name)
 
         if sub_name is None: # atlas check
+            if atlas.additions or atlas.replacements:
+                return Modified.REPLACED # not actually replaced, but it gets colored yellow cuz subitems are modified
+            
             if findLast(atlas.replacements, Image.Image) is not None:
                 return Modified.REPLACED
 
@@ -1295,18 +1430,12 @@ class TextureStudio(QMainWindow):
             match self.isModified(atlas_name, name):
                 case Modified.REPLACED:
                     item.setForeground(Qt.yellow)
-                    current.setForeground(Qt.yellow)
                 case Modified.ADDED:
                     item.setForeground(Qt.green)
-                    current.setForeground(Qt.yellow)
 
             self.subtexture_list.addItem(item)
         
-        match self.isModified(atlas_name, None): # check if whole atlas is modified
-            case Modified.ADDED:
-                current.setForeground(Qt.green)
-            case Modified.REPLACED:
-                current.setForeground(Qt.yellow)
+        self.reloadHighlighting(only_current=True) # check if whole atlas is modified
 
         self.subtexture_list.blockSignals(False)
         self.subtexture_list.sortItems()
@@ -1349,12 +1478,18 @@ class TextureStudio(QMainWindow):
         else: # No subtexture selected, export the full atlas   
             img_type = self.atlas_list.currentItem().data(Qt.UserRole+2)
             if img_type == ImageType.Atlas:
-                ok, choice = showSelectOptions("Select Export", f"The currently selected texture is an atlas.\nWould you like to export the whole image, " \
-                                                    "or its subtextures?", ["Full Atlas", "All Subtextures"])
-                
-                if not ok:
+                dlg = RadioButtonDialog(
+                    "Select Export Type",
+                    f"The currently selected texture is an atlas.\nWould you like to export the whole image, or its subtextures?",
+                    options={
+                        0: "Full Atlas Texture",
+                        1: "Dump All Subtextures"
+                    }
+                )
+                if not dlg.exec():
                     return
-                if choice == "All Subtextures":
+                
+                if dlg.selected() == 1:#"All Subtextures"
                     self.saveAll()
                     return
 

@@ -76,3 +76,8 @@ class BackgroundMode(IntEnum):
     BLACK = 0
     WHITE = 1
     CHECKERED = 2
+
+class DeltaMode(Enum):
+    SELF = auto()
+    DIFF = auto()
+

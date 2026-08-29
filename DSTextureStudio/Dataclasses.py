@@ -5,13 +5,14 @@ from typing import Optional, Callable
 from PIL import Image
 from pathlib import Path
 from io import BytesIO
+import struct
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.base.textures.dds import DDS
 from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
 from soulstruct.dcx import DCXType
 from DSTextureStudio.Utilities import path_has_sequence, findLast, tupleAdd
-from DSTextureStudio.Enums import ImageType, Game, Resolution
+from DSTextureStudio.Enums import ImageType, Game, Resolution, DeltaMode
 from DSTextureStudio.Helpers import cleanByAlpha
 import xml.etree.ElementTree as ET
 
@@ -139,7 +140,7 @@ class AtlasLayout:
                 "y": str(sub.y),
                 "width": str(sub.width),
                 "height": str(sub.height),
-                "half": str(int(sub.half))})
+                "half": str(int(sub.flag_half))})
             
             logger.info("Adding Subtexture to %s:\n%s", sub.parent, ET.tostring(item, encoding='unicode'))
             
@@ -179,7 +180,7 @@ class Atlas:
     name: str
     parent: Optional[Path] # when None, is written as a standalone file 
 
-    texture: TPFTexture
+    texture: TPFTexture|Image.Image # in practice this should always be TPFTexture. Image is allowed for making Deltas
     dimensions: Optional[tuple[int, int]] = None # only needed for custom Atlases, used for writing TextureAtlas xml properties
 
     subtextures: list[SubTexture] = field(default_factory=list)
@@ -200,6 +201,10 @@ class Atlas:
         return len(self.subtextures)
 
     @property
+    def filename(self) -> str:
+        return self.parent.name
+    
+    @property
     def viewable(self) -> Image.Image:
         """Returns a viewable Image of self.texture's dds"""
         # existing textures return due to being a valid DDS, custom are not swizzled; PC skips deswizzling
@@ -209,7 +214,7 @@ class Atlas:
 
     @property
     def modified(self) -> bool:
-        return (len(self.replacements) + len(self.additions)) > 0
+        return (self.replacements and self.additions)
 
     @property
     def modifications(self) -> dict:
@@ -218,7 +223,7 @@ class Atlas:
             "Additions": self.additions,
             "Replacements": self.replacements
         }
-    
+
     # region Helpers
     def rename(self, new_name) -> bool:
         """Renames Atlas object. Returns True if successful"""
@@ -234,6 +239,26 @@ class Atlas:
                 self.renameAttrParent(i, new_name)
             return True
         return False
+
+    def clearChanges(self):
+        """Clears all changes."""
+        self.additions.clear()
+        self.replacements.clear()
+
+    def allSubs(self, include_non_modified: bool = True) -> list[SubTexture]:
+        """Returns a single list of SubTextures defining the whole atlas. Built from modifications."""
+        all_subs = self.additions.copy()
+        if include_non_modified:
+            all_subs += self.subtextures
+
+        sub_map = {i.name: i for i in all_subs}
+        sub_map.update({i.name: i for i in self.replacements})
+
+        return list(sub_map.values())
+
+    def mergeChanges(self) -> list[SubTexture]:
+        """Returns combined list of all changes to the atlas."""
+        return self.allSubs(include_non_modified=False)
 
     # region Subtexture Helpers
     def add(self, subtexture: SubTexture) -> None:
@@ -269,7 +294,66 @@ class Atlas:
         """Finds SubTexture object of 'name' and replaces its 'img' field with a provided image"""
         sub,_ = self.match(name)
         if sub is not None:
-            sub.img = image
+            sub.image = image
+
+    def update(self, atlas: Atlas):
+        """Update self modifications against another Atlas object by finding diffs."""
+        for sub in atlas.subtextures:
+            if self.fetch(sub.name) is None: # is unique to updater/delta; addition
+                target = self.additions
+            else:
+                target = self.replacements
+
+            existing = next((idx for idx,a in enumerate(target) if a.name==sub.name), None)
+            if existing is not None:
+                target.pop(existing)
+
+            if sub.image is None:
+                sub.parent = atlas.name
+                sub.image = atlas.texture.crop(sub.box())
+
+            if target == self.additions: # needs to be registered in subtextures if addition
+                self.add(sub)
+
+            target.append(sub)
+
+    # region Creating
+    @classmethod
+    def from_layouts(cls, textures: list[TPFTexture], layouts: list[AtlasLayout], parent_file: Path):
+        """Yields tuple[atlas.name, Atlas] for a list of Atlas objects built from TPFTextures and AtlasLayouts"""
+        layout_lookup = {
+            Path(atlas.imagePath).stem: atlas
+            for atlas in layouts
+        }
+
+        for tex in textures:
+            name = tex.stem
+            layout = layout_lookup.get(name)
+
+            if layout is None:
+                logger.debug("Creating Atlas object with no SubTextures for Texture with no Layout: '%s'", name)
+                subtextures = []
+            else:
+                subtextures = [
+                    SubTexture(
+                        name=Path(sub.get("name")).stem,
+                        parent=name,
+                        x=int(sub.get("x")),
+                        y=int(sub.get("y")),
+                        width=int(sub.get("width")),
+                        height=int(sub.get("height")),
+                        blank=False,
+                        vanilla=True,
+                    )
+                    for sub in layout.iter_subtextures()
+                ]
+
+            yield name, Atlas(
+                name=name,
+                texture=tex,
+                parent=parent_file,
+                subtextures=subtextures,
+            )
 
     # region Writing     
     def writetpf(self, output: Path, dcx_type: DCXType = DCXType.Null, encoding: int = 1, flags: int = 3, platform: TPFPlatform = TPFPlatform.PC):
@@ -286,7 +370,7 @@ class Atlas:
         IMG = self.viewable
 
         for add in self.additions:
-            if add.parent != self.name or add.img is None:
+            if add.parent != self.name or add.image is None:
                 continue
 
             abs_w, abs_h = tupleAdd([add.size, add.pos])
@@ -326,6 +410,148 @@ class Atlas:
 
         _TPF.textures.append(texture)
 
+    # region Delta
+    def getDelta(self, vanilla: Optional[Atlas] = None) -> "Atlas":
+        """Creates delta of 2 Atlases, comparing self to vanilla."""
+        if vanilla is None:
+            subtextures = self.mergeChanges()
+            return Atlas(
+                name=self.name,
+                parent=self.parent,
+                texture=self.compileTexture(),
+                subtextures=subtextures
+            ) if subtextures else None
+
+        if vanilla.filename != self.filename:
+            logger.warning("%s.getDelta(%s): Attempted to find diff between 2 files without matching parents, skipping.", self.name, vanilla.name)
+            return None
+        
+        subtextures = []
+
+        for sub in self.allSubs():
+            if vanilla.fetch(sub.name) is not None:
+                continue
+
+            subtextures.append(sub)
+
+        if not subtextures:
+            return None
+
+        return Atlas(
+            name=self.name,
+            parent=self.parent,
+            texture=self.compileTexture(),
+            subtextures=subtextures
+        )
+
+    @staticmethod
+    def generateDeltaFile(mode: DeltaMode, source: Path|list[Atlas], layout: Optional[Path], vanilla: tuple[Path,Path], output: Path):
+        """Generates a .delta file containing diffs between a modded and vanilla file."""
+        deltas = []
+
+        match mode:
+            case DeltaMode.SELF:
+                assert isinstance(source, list)
+                for atlas in source:
+                    delta = atlas.getDelta()
+                    if delta is not None:
+                        deltas.append(delta)
+
+                Atlas.writeDeltaFile(deltas, output)
+
+            case DeltaMode.DIFF:
+                if isinstance(source, Path):
+                    assert layout is not None
+                    source_tpf = TPF(source)
+                    source_layouts = AtlasLayout.from_binder(layout)
+                    source = Atlas.from_layouts(source_tpf.textures, source_layouts, source)
+
+                vanilla_bnd, vanilla_lyt = vanilla
+                vanilla_layouts = AtlasLayout.from_binder(vanilla_lyt)
+                vanilla_atlases = {name: atlas for name, atlas in
+                                Atlas.from_layouts(TPF(vanilla_bnd).textures, vanilla_layouts, vanilla_bnd)
+                }
+
+                for atlas in source:
+                    vanilla_atlas = vanilla_atlases.get(atlas.name)
+                    delta = atlas.getDelta(vanilla_atlas)
+                    if delta is not None:
+                        deltas.append(delta)
+
+                Atlas.writeDeltaFile(deltas, output)
+
+    @staticmethod
+    def writeDeltaFile(deltas: list[Atlas], path: Path):
+        with open(path, 'wb') as f:
+            f.write(struct.pack("<I", len(deltas)))
+
+            for d in deltas:
+                f.write(d.to_bytes())
+
+    @classmethod
+    def readDeltaFile(cls, file: Path) -> list['Atlas']:
+        with open(file, 'rb') as f:
+            (count,) = struct.unpack("<I", f.read(4))
+
+            return [
+                cls.from_file(f)
+                for _ in range(count)
+            ]
+
+    def to_bytes(self) -> bytes:
+        result = bytearray()
+
+        name = self.name.encode("utf-8")
+        result += struct.pack("<I", len(name))
+        result += name
+
+        parent = str(self.parent).encode("utf-8")
+        result += struct.pack("<I", len(parent))
+        result += parent
+
+        image_buffer = BytesIO()
+        self.texture.save(image_buffer, format="PNG")
+        image_data = image_buffer.getvalue()
+
+        result += struct.pack("<I", len(image_data))
+        result += image_data
+
+        result += struct.pack("<I", len(self.subtextures))
+        for sub in self.subtextures:
+            sub_data = sub.to_bytes()
+            result += struct.pack("<I", len(sub_data))
+            result += sub_data
+
+        return bytes(result)
+
+    @classmethod
+    def from_file(cls, f) -> Atlas:
+        (name_length,) = struct.unpack("<I", f.read(4))
+        name = f.read(name_length).decode("utf-8")
+
+        (parent_length,) = struct.unpack("<I", f.read(4))
+        parent = Path(f.read(parent_length).decode("utf-8"))
+
+        (image_length,) = struct.unpack("<I", f.read(4))
+        image_data = f.read(image_length)
+        image = Image.open(BytesIO(image_data))
+        image.load()
+
+        subtextures = []
+
+        (count,) = struct.unpack("<I", f.read(4))
+        for _ in range(count):
+            (subtexture_length,) = struct.unpack("<I", f.read(4))
+            subtexture_data = f.read(subtexture_length)
+
+            subtextures.append(SubTexture.from_bytes(subtexture_data))
+
+        return cls(
+            name=name,
+            parent=parent,
+            texture=image,
+            subtextures=subtextures,
+        )
 
     def __repr__(self) -> str:
         return (
@@ -334,8 +560,8 @@ class Atlas:
             f"    Parent = {self.parent}\n"
             f"    Subtexture Count = {self.count}\n"
             f"    Dimensions = {self.dimensions}\n"
-            f"    Queued Additions = {len(self.self.additions)}\n"
-            f"    Queued Replacements = {len(self.self.replacements)}\n"
+            f"    Queued Additions = {len(self.additions)}\n"
+            f"    Queued Replacements = {len(self.replacements)}\n"
             f"    Texture = \n{indent(self.texture.__repr__(), "        ")}\n" 
            # f"    Subtextures = \n{indent(self.subtextures.__repr__(), "        ")}\n"
             f")"
@@ -350,13 +576,13 @@ class SubTexture:
     width: int
     height: int
 
-    img: Optional[Image.Image] = None
+    image: Optional[Image.Image] = None # is None for vanilla subtextures as can just be cropped from parent Atlas
 
     parent: Optional[str] = None # name of parent atlas
     vanilla: Optional[bool] = False # set to True on load. Custom additions are False, and therefore can be filtered for 
 
     blank: bool = False
-    half: Optional[bool] = False # what even is this bro
+    flag_half: Optional[bool] = False # what even is this bro
 
     @property
     def pos(self) -> tuple[int, int]:
@@ -379,9 +605,37 @@ class SubTexture:
     
     def paste_into(self, image: Image.Image, mask: Image.Image | None = None) -> None:
         """Pastes self into an image"""
-        if self.img is None:
+        if self.image is None:
             raise Exception("SubTexture object does not contain an image.")
-        image.paste(self.img, self.pos, mask=mask)
+        image.paste(self.image, self.pos, mask=mask)
+
+    def to_bytes(self) -> bytes:
+        result = bytearray()
+
+        name = self.name.encode("utf-8")
+        result += struct.pack("<I", len(name))
+        result += name
+
+        result += struct.pack("<iiii", self.x, self.y, self.width, self.height)
+
+        return bytes(result)
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "SubTexture":
+        f = BytesIO(data)
+
+        (name_length,) = struct.unpack("<I", f.read(4))
+        name = f.read(name_length).decode("utf-8")
+
+        x, y, width, height = struct.unpack("<iiii", f.read(16))
+
+        return cls(
+            name=name,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+        )
 
     def __repr__(self) -> str:
         return (
@@ -389,11 +643,11 @@ class SubTexture:
             f"    Name = {self.name}\n"
             f"    Parent = {self.parent}\n"
             f"    Is Vanilla = {self.vanilla}\n"
-            f"    Image = {self.img}\n"
+            f"    Image = {self.image}\n"
             f"    Coordinates = {self.pos}\n"
             f"    Dimensions = {self.width}x{self.height}\n"
             f"    Blank = {self.blank}\n"
-            f"    Half = {self.half}\n"
+            f"    Half = {self.flag_half}\n"
             f")"
         )
     
