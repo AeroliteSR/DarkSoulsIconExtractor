@@ -171,9 +171,6 @@ class TextureStudio(QMainWindow):
         self.file_menu.addAction(createAction("Open Directory", lambda: self.openDcxDialog(dirmode=True)))
         self.file_menu.addSeparator()
         self.file_menu.addAction(createAction("Save As", self.applyChanges))
-        dump = self.file_menu.addMenu("Dump")
-        dump.addAction(createAction("Atlases", lambda: self.dumpTextures(mode=ExportMode.ATLAS)))
-        dump.addAction(createAction("Subtextures", lambda: self.dumpTextures(mode=ExportMode.SUBTEXTURE)))
         self.file_menu.addSeparator()
         self.file_menu.addAction(createAction("Undo All Changes", self.undoChanges))
         self.file_menu.addAction(createAction("Clear Workspace", self.clear))
@@ -210,6 +207,9 @@ class TextureStudio(QMainWindow):
         deltapatch = self.tools_menu.addMenu("Merging")
         deltapatch.addAction(createAction("Generate Delta", self.createDelta))
         deltapatch.addAction(createAction("Import Delta", self.mergeDelta))
+        dump = self.tools_menu.addMenu("Dumpers")
+        dump.addAction(createAction("Atlases", lambda: self.dumpTextures(mode=ExportMode.ATLAS)))
+        dump.addAction(createAction("Subtextures", lambda: self.dumpTextures(mode=ExportMode.SUBTEXTURE)))
         
         self.help_menu = menu.addMenu("Help")
         self.help_menu.addAction(createAction("Settings", lambda: QMessageBox.information(self, "Settings Info", "<b>Custom Names:</b><br> When enabled, this setting replaces" \
