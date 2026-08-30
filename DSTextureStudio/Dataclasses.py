@@ -219,7 +219,7 @@ class Atlas:
 
     @property
     def modified(self) -> bool:
-        return (self.replacements and self.additions)
+        return (self.replacements or self.additions)
 
     @property
     def modifications(self) -> dict:
@@ -257,7 +257,7 @@ class Atlas:
             all_subs += self.subtextures
 
         sub_map = {i.name: i for i in all_subs}
-        sub_map.update({i.name: i for i in self.replacements})
+        sub_map.update({i.name: i for i in self.replacements if isinstance(i, Atlas)})
 
         return list(sub_map.values())
 
