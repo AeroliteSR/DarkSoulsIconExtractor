@@ -1301,34 +1301,41 @@ class TextureStudio(QMainWindow):
 
     def updateCache(self, atlas_name):
         """Updates thumbnail cache with an atlas' image that has had all modifications compiled"""
-        atlas = next((a for a in self.pending_new_atlases
-                      if a.name == atlas_name), None) or self.atlases[atlas_name]
-        self.thumbnail_cache[atlas_name] = atlas.compileTexture(self.alphaThreshold)
+        self.thumbnail_cache[atlas_name] = self.getPilImage(atlas_name)
 
-    def getPilImage(self, atlas_name, createDebug=False):
+    def getPilImage(self, atlas_name, createDebug=False) -> Image.Image:
         """Returns rendered preview (rebuild if needed)"""
-        if atlas_name not in self.thumbnail_cache:
-            self.updateCache(atlas_name)
-
-        img = self.thumbnail_cache[atlas_name]
+        atlas = next((a for a in self.pending_new_atlases
+                        if a.name == atlas_name), None) or self.atlases.get(atlas_name)
+        if atlas is None:
+            raise KeyError(f"Atlas with name {atlas_name} coudln't be located.")
+        
+        img = atlas.compileTexture(self.alphaThreshold)
 
         if createDebug:
             img = createDebugGrid(img, self.atlases[atlas_name].allSubs())
 
         return img
 
-    def getPixmap(self, img: Optional[Image.Image] = None, resample: bool = False, crop_to: Optional[tuple] = None):
-        """Returns pixmap of current texture preview. Used to ensure proper quality with no downscaling in the Texture Viewer."""
-        if img is None:
-            sub = self.subtexture_list.currentItem()
-            if sub is not None: # subtexture
-                name = self.subtexture_list.currentItem().data(Qt.UserRole)
-                st = self.atlases[self.current_atlas].fetch(name)
-                img = self.getPilImage(self.current_atlas).crop(st.box())
+    def getSelectedImage(self) -> Image.Image:
+        """Returns Image object of current preview"""
+        sub = self.subtexture_list.currentItem()
+        if sub is not None: # subtexture
+            name = self.subtexture_list.currentItem().data(Qt.UserRole)
+            st = self.atlases[self.current_atlas].fetch(name)
+            img = self.getPilImage(self.current_atlas).crop(st.box())
 
-            else: # atlas
-                atlas_name = self.atlas_list.currentItem().data(Qt.UserRole)
-                img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked()).copy()
+        else: # atlas
+            atlas_name = self.atlas_list.currentItem().data(Qt.UserRole)
+            img = self.getPilImage(atlas_name, createDebug=self.btn_atlasGrid.isChecked()).copy()
+
+        img.convert()
+        return img
+
+    def getPixmap(self, img: Optional[Image.Image] = None, resample: bool = False, crop_to: Optional[tuple] = None):
+        """Returns pixmap of current texture preview."""
+        if img is None:
+            img = self.getSelectedImage()
 
         if crop_to is not None:
             img = img.crop(crop_to)

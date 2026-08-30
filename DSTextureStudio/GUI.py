@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox, QButtonGroup, QRadioButton,
 QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout, QGridLayout, QProgressDialog)
 from PySide6.QtCore import Qt, QPropertyAnimation, QRect, QPoint, QTimer
-from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment
+from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment, QImage
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP, SubtexturePrefix
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
 from typing import Callable, Optional
@@ -704,9 +704,11 @@ class ImageViewer(QGraphicsView):
 
     def __init__(self, pixmap, parent=None):
         super().__init__(parent)
+        self.pixmap = pixmap
+        self.qimage: QImage = pixmap.toImage()
 
         self.setScene(QGraphicsScene(self))
-        self.pixmap_item = self.scene().addPixmap(pixmap)
+        self.pixmap_item = self.scene().addPixmap(self.pixmap)
         self.setRenderHints(self.renderHints() |
                             QPainter.Antialiasing |
                             QPainter.SmoothPixmapTransform)
@@ -757,7 +759,6 @@ class ImageViewer(QGraphicsView):
         self.pixel_info.setStyleSheet(style)
 
         self.pixel_info.show()
-        self.image = pixmap.toImage()
 
         self.color_preview = QLabel(self)
         self.color_preview.setFixedSize(32, 32)
@@ -806,13 +807,11 @@ class ImageViewer(QGraphicsView):
         self.color_preview.setVisible(visible)
 
     def getColorData(self, scene_pos):
-
         x = int(scene_pos.x())
         y = int(scene_pos.y())
 
-        if 0 <= x < self.image.width() and 0 <= y < self.image.height():
-
-            color = self.image.pixelColor(x, y)
+        if 0 <= x < self.qimage.width() and 0 <= y < self.qimage.height():
+            color = self.qimage.pixelColor(x, y)
 
             r, g, b, a = color.getRgb()
 
@@ -838,7 +837,7 @@ class ImageViewer(QGraphicsView):
         self.showPopup("Info Copied!")
 
     def copyImage(self):
-        QGuiApplication.clipboard().setPixmap(self.pixmap_item.pixmap())
+        QGuiApplication.clipboard().setImage(self.qimage)
         logger.info("Copied image to clipboard!")
         self.showPopup("Image Copied!")
 
