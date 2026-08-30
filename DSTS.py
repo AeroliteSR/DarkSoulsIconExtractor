@@ -9,8 +9,6 @@ from webbrowser import open_new_tab
 from typing import Optional
 from tempfile import NamedTemporaryFile
 # GUI
-from multiprocessing import Process, Queue
-from queue import Empty
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QListWidget, QHBoxLayout, QFileDialog, QPushButton,
 QMessageBox, QSplitter, QProgressDialog, QInputDialog, QMenu, QLineEdit)
 from PySide6.QtGui import QIcon, QDesktopServices, QAction
@@ -24,7 +22,7 @@ from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
 from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode
 from DSTextureStudio.Helpers import checkGame, getFreeSpace, createBlankImage, createDebugGrid, getPngSize, validateImageForSwizzle
-from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker, make_delta_process
+from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
 showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt, ProcessingBar, RadioButtonDialog)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
@@ -177,10 +175,6 @@ class TextureStudio(QMainWindow):
 
         self.settings_menu = menu.addMenu("Settings")
 
-        self.btn_useCustomNames = QAction("Community Names", self)
-        self.btn_useCustomNames.setCheckable(True)
-        self.btn_useCustomNames.toggled.connect(self.toggleCustomNames)
-
         self.btn_calcImageSize = QAction("Calculate Image Size", self)
         self.btn_calcImageSize.setCheckable(True)
 
@@ -196,7 +190,6 @@ class TextureStudio(QMainWindow):
         self.btn_alphaThreshold = QAction(f"Alpha Threshold = {self.alphaThreshold}", self)
         self.btn_alphaThreshold.triggered.connect(self.promptAlphaThreshold)
 
-        self.settings_menu.addAction(self.btn_useCustomNames)
         self.settings_menu.addAction(self.btn_hideBlankIcons)
         self.settings_menu.addAction(self.btn_calcImageSize)
         self.settings_menu.addAction(self.btn_atlasGrid)
@@ -204,6 +197,18 @@ class TextureStudio(QMainWindow):
         self.settings_menu.addAction(self.btn_alphaThreshold)
 
         self.tools_menu = menu.addMenu("Tools")
+        customnames = self.tools_menu.addMenu("Community Names")
+        self.btn_useCustomNames_atlas = QAction("Atlases", self)
+        self.btn_useCustomNames_atlas.setCheckable(True)
+        self.btn_useCustomNames_atlas.toggled.connect(lambda: self.toggleCustomNames(self.atlas_list))
+
+        self.btn_useCustomNames_subtextures = QAction("Subtextures", self)
+        self.btn_useCustomNames_subtextures.setCheckable(True)
+        self.btn_useCustomNames_subtextures.toggled.connect(lambda: self.toggleCustomNames(self.subtexture_list))
+
+        customnames.addAction(self.btn_useCustomNames_atlas)
+        customnames.addAction(self.btn_useCustomNames_subtextures)
+
         deltapatch = self.tools_menu.addMenu("Merging")
         deltapatch.addAction(createAction("Generate Delta", self.createDelta))
         deltapatch.addAction(createAction("Import Delta", self.mergeDelta))
@@ -980,7 +985,7 @@ class TextureStudio(QMainWindow):
         logger.info("Finished populating atlas list")
 
         self.atlas_list.sortItems()
-        self.toggleCustomNames() # simply update it just in case setting was on before load
+        self.toggleCustomNames(self.atlas_list) # simply update it just in case setting was on before load
         self.atlas_list.setCurrentRow(0)
         self.showAtlas(self.atlas_list.currentItem())
 
@@ -1042,7 +1047,7 @@ class TextureStudio(QMainWindow):
             _open.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(saved_path))))
             msg.exec()
 
-    def toggleCustomNames(self):
+    def toggleCustomNames(self, caller: QListWidget):
         """Replaces displaying text for QListWidgetItems with the mapped ones whilst retaining the original in UserRole"""
 
         def restoreNames(widget: QListWidget):
@@ -1050,35 +1055,45 @@ class TextureStudio(QMainWindow):
                 item = widget.item(idx)
                 item.setText(item.data(Qt.UserRole))
 
-        if self.btn_useCustomNames.isChecked():
-            ATLASNAMES = loadJson("Atlas_Names")
-            SUBNAMES = loadJson("Subtexture_Names")
-            for idx in range(self.atlas_list.count()):
-                item = self.atlas_list.item(idx)
-                text = item.text()
-                if self.game.name == 'Dark Souls 2': # special handling due to weird naming system
-                    text = text[text.rfind('_')+1:]
+        match caller:
+            case self.atlas_list:
+                if self.btn_useCustomNames_atlas.isChecked():
+                    ATLASNAMES = loadJson("Atlas_Names")
+                    for idx in range(self.atlas_list.count()):
+                        item = self.atlas_list.item(idx)
+                        text = item.text()
+                        if self.game.name == 'Dark Souls 2': # special handling due to weird naming system
+                            text = text[text.rfind('_')+1:]
 
-                name = ATLASNAMES.get(self.game.name, {}).get(text, None) or item.text()
-                item.setText(name)
-            
-            for idx in range(self.subtexture_list.count()):
-                item = self.subtexture_list.item(idx)
-                text = item.text()
+                        name = ATLASNAMES.get(self.game.name, {}).get(text, None) or item.text()
+                        item.setText(name)
 
-                _, *pieces = text.split('_')
-                try:
-                    id = pieces[-1]
-                    _type = pieces[0]
-                    name = SUBNAMES.get(self.game.name, {}).get(_type, {}).get(id.lstrip('0'), None) or text
-                except IndexError:
-                    name = text
+                else:
+                    restoreNames(self.atlas_list)
 
-                item.setText(name)
+            case self.subtexture_list:
+                if self.btn_useCustomNames_subtextures.isChecked():
+                    SUBNAMES = loadJson("Subtexture_Names")
+                    for idx in range(self.subtexture_list.count()):
+                        item = self.subtexture_list.item(idx)
+                        text = item.text()
 
-        else:
-            restoreNames(self.atlas_list)
-            restoreNames(self.subtexture_list)
+                        _, *pieces = text.split('_')
+                        try:
+                            id = pieces[-1]
+                            _type = pieces[0]
+                            name = SUBNAMES.get(self.game.name, {}).get(_type, {}).get(id.lstrip('0'), None) or text
+                        except IndexError:
+                            name = text
+
+                        item.setText(name)
+
+                else:
+                    restoreNames(self.subtexture_list)
+
+        current_search = self.subtexture_search.text()
+        if current_search:
+            self.filterList(current_search, self.subtexture_list)   
 
     def promptAlphaThreshold(self):
         num, ok = QInputDialog.getInt(None, "Prompt", "Enter new Alpha Threshold:", 10, 0, 255, 1)
@@ -1399,7 +1414,12 @@ class TextureStudio(QMainWindow):
         self.subtexture_list.sortItems()
 
         self.info_label.setText(self.formatImageInfo(atlas_name, dcx_file, atlas_img, img_type=current.data(Qt.UserRole+2)))
-        self.toggleCustomNames() # just to update it
+        self.toggleCustomNames(self.atlas_list) # just to update it
+        self.toggleCustomNames(self.subtexture_list) # ''
+
+        current_search = self.subtexture_search.text()
+        if current_search:
+            self.filterList(current_search, self.subtexture_list)
 
     def showSubtexture(self, current):
         """Display a preview of the selected subtexture."""
