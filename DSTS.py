@@ -128,11 +128,11 @@ class TextureStudio(QMainWindow):
         self.info_label.setMinimumHeight(150)
         right_layout.addWidget(self.info_label)
 
-        self.save_button = QPushButton("Export Selected Texture")
+        self.save_button = QPushButton("Export Texture(s)")
         self.save_button.clicked.connect(self.saveSelection)
         right_layout.addWidget(self.save_button)
 
-        self.replace_button = QPushButton("Replace Selected Texture")
+        self.replace_button = QPushButton("Replace Texture")
         self.replace_button.clicked.connect(self.registerReplacement)
         right_layout.addWidget(self.replace_button)
 
@@ -288,7 +288,8 @@ class TextureStudio(QMainWindow):
                 0: "Create Delta from queued modifications",
                 1: "Create Delta from diffs against a vanilla file",
                 2: "Create Delta from custom selection"
-            }
+            },
+            default=1
         )
 
         if not dlg.exec():
@@ -1016,9 +1017,10 @@ class TextureStudio(QMainWindow):
             return
 
         if mode == ExportMode.ATLAS:
-            ok, filetype = showSelectOptions('File Type', 'Would you like to export in PNG or DDS?', ['png', 'dds'])
-            if not ok:
+            filetypeprompt = RadioButtonDialog('File Type', 'Would you like to export in PNG or DDS?', options={0: 'png', 1: 'dds'}, default=0)
+            if not filetypeprompt.exec():
                 return
+            filetype = 'dds' if filetypeprompt.selected()==1 else 'png'
         else:
             filetype = 'png'
 
@@ -1485,32 +1487,51 @@ class TextureStudio(QMainWindow):
 
         else: # No subtexture selected, export the full atlas   
             img_type = self.atlas_list.currentItem().data(Qt.UserRole+2)
-            if img_type == ImageType.Atlas:
+            if img_type == ImageType.Texture:
+                self.runExtraction(tasks=[(self.current_atlas, None)], mode=ExportMode.ATLAS)
+
+            elif img_type == ImageType.Atlas:
                 dlg = RadioButtonDialog(
                     "Select Export Type",
                     f"The currently selected texture is an atlas.\nWould you like to export the whole image, or its subtextures?",
                     options={
                         0: "Full Atlas Texture",
-                        1: "Dump All Subtextures"
-                    }
+                        1: "Dump All Subtextures",
+                        2: "Select Subtextures to Export"
+                    },
+                    default=0
                 )
                 if not dlg.exec():
                     return
                 
-                if dlg.selected() == 1:#"All Subtextures"
-                    self.saveAll()
-                    return
+                match dlg.selected():
+                    case 1:#"All Subtextures"
+                        self.saveAll()
+                        return
 
-            gridOverlay = self.btn_atlasGrid.isChecked()
-            if gridOverlay:
-                answer = showQuery('Export', 'You currently have the Grid Overlay enabled, do you want to keep it in the image for this export?')
-                if answer == QMessageBox.Cancel:
-                    return
-                
-                elif answer == QMessageBox.No:
-                    gridOverlay = False
+                    case 0:#"Full"
+                        gridOverlay = self.btn_atlasGrid.isChecked()
+                        if gridOverlay:
+                            answer = showQuery('Export', 'You currently have the Grid Overlay enabled, do you want to keep it in the image for this export?')
+                            if answer == QMessageBox.Cancel:
+                                return
+                            
+                            elif answer == QMessageBox.No:
+                                gridOverlay = False
 
-            self.runExtraction(tasks=[(self.current_atlas, None)], mode=ExportMode.ATLAS, gridOverlay=gridOverlay)
+                        self.runExtraction(tasks=[(self.current_atlas, None)], mode=ExportMode.ATLAS, gridOverlay=gridOverlay)
+
+                    case 2:#"Select"
+                        selector = SubtextureSelectorWindow("Select Subtextures", self.atlases)
+                        if not selector.exec():
+                            return
+
+                        selection = selector.getSelected()
+                        tasks = []
+                        for atlas in selection:
+                            for sub in atlas.allSubs():
+                                tasks.append((atlas.name, sub))
+                        self.runExtraction(tasks=tasks)
 
     def saveAll(self):
         """Export all subtextures from the currently selected atlas"""

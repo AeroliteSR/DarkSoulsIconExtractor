@@ -574,7 +574,7 @@ class CompressionPrompt(QDialog):
         return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
    
 class RadioButtonDialog(QDialog):
-    def __init__(self, title, text, options: dict, parent=None):
+    def __init__(self, title, text, options: dict, default: int, parent=None):
         super().__init__(parent)
 
         self.setWindowTitle(title)
@@ -588,6 +588,8 @@ class RadioButtonDialog(QDialog):
 
         for _id, text in options.items():
             btn = QRadioButton(text)
+            if _id == default:
+                btn.setChecked(True)
             self.group.addButton(btn, _id)
             layout.addWidget(btn)
 
