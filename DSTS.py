@@ -20,7 +20,7 @@ from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
-from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode
+from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode, WriteTask
 from DSTextureStudio.Helpers import checkGame, getFreeSpace, createBlankImage, createDebugGrid, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
@@ -168,7 +168,9 @@ class TextureStudio(QMainWindow):
         self.file_menu.addAction(createAction("Open File", lambda: self.openDcxDialog(dirmode=False)))
         self.file_menu.addAction(createAction("Open Directory", lambda: self.openDcxDialog(dirmode=True)))
         self.file_menu.addSeparator()
-        self.file_menu.addAction(createAction("Save As", self.applyChanges))
+        self.file_menu.addAction(createAction("Save All", lambda: self.applyChanges(task=WriteTask.All)))
+        self.file_menu.addAction(createAction("Save TPF", lambda: self.applyChanges(task=WriteTask.TPF)))
+        self.file_menu.addAction(createAction("Save Layout", lambda: self.applyChanges(task=WriteTask.LYT)))
         self.file_menu.addSeparator()
         self.file_menu.addAction(createAction("Undo All Changes", self.undoChanges))
         self.file_menu.addAction(createAction("Clear Workspace", self.clear))
@@ -260,12 +262,17 @@ class TextureStudio(QMainWindow):
             item.setHidden(text not in item.text().lower())
 
     def undoChanges(self):
+        answer = showQuery("Discard Changes?", "Are you sure you want to discard all changes?")
+        if answer != QMessageBox.Yes:
+            return
+        
         self.pending_new_atlases = []
         for a in self.atlases.values():
             a.clearChanges()
 
         self.atlas_list.setCurrentRow(0)
         self.showAtlas(self.atlas_list.currentItem())
+        self.reloadHighlighting()
 
     def createDelta(self):
         self.checkOodleDLL()
@@ -1206,7 +1213,7 @@ class TextureStudio(QMainWindow):
         
         self.queueReplacement(atlas, sub, img_path)
 
-    def applyChanges(self):
+    def applyChanges(self, task: WriteTask):
         """Start replacement from File menu and create popup."""
         if not self.hasPendingChanges():
             QMessageBox.information(self, "Info", "No actions queued.")
@@ -1219,7 +1226,8 @@ class TextureStudio(QMainWindow):
         self.replace_dialog = ProcessingBar("Applying changes...")
 
         self.r_thread = QThread()
-        self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA, self.alphaThreshold,  self.game, output_dir)
+        self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA, 
+                                    self.alphaThreshold,  self.game, output_dir, task)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
@@ -1358,6 +1366,8 @@ class TextureStudio(QMainWindow):
                     item.setForeground(Qt.green)
                 case Modified.REPLACED:
                     item.setForeground(Qt.yellow)
+                case Modified.FALSE:
+                    item.setForeground(Qt.white)
 
     def isModified(self, atlas_name, sub_name=None):
         """Returns True if subtexture has been modified, for recoloring its entry."""

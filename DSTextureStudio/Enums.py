@@ -81,3 +81,8 @@ class DeltaMode(Enum):
     SELF = auto()
     DIFF = auto()
 
+class WriteTask(Enum):
+    ALL = auto()
+    TPF = auto()
+    LYT = auto()
+
