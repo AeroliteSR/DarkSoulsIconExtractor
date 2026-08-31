@@ -24,7 +24,7 @@ from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolut
 from DSTextureStudio.Helpers import checkGame, getFreeSpace, createBlankImage, createDebugGrid, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
-showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt, ProcessingBar, RadioButtonDialog)
+showError, showQuery, showSelectOptions, NaturalListItem, getOutputPath, CompressionPrompt, ProcessingBar, RadioButtonDialog, SubtextureSelectorWindow)
 from DSTextureStudio.log_utils import setuplog, addQtHandler, handle_exception, LogEmitter
 from DSTextureStudio.Console import ConsoleWindow
 from DSTextureStudio.Utilities import replaceTerms, loadJson, getDSTSdir, findLast
@@ -286,7 +286,8 @@ class TextureStudio(QMainWindow):
             "Choose delta creation mode.",
             options={
                 0: "Create Delta from queued modifications",
-                1: "Create Delta from diffs against a vanilla file"
+                1: "Create Delta from diffs against a vanilla file",
+                2: "Create Delta from custom selection"
             }
         )
 
@@ -308,7 +309,19 @@ class TextureStudio(QMainWindow):
                 if not file_path or file_path == BLANK_PATH:
                     logger.warning("%s is either an invalid path or wasn't returned on prompt. Delta creation aborted.", file_path.name)
                     return          
-                                    
+
+            case 2:
+                selector = SubtextureSelectorWindow("Select Subtextures", self.atlases)
+                if not selector.exec():
+                    return
+
+                output = Path(QFileDialog.getSaveFileName(self, "Save As", "", "Delta Patches (*.delta)")[0])
+
+                selected = selector.getSelected()
+                Atlas.writeDeltaFile(selected, path=output)
+                self.extractionDone(saved_path=output.parent)
+                return
+
         output = Path(QFileDialog.getSaveFileName(self, "Save As", "", "Delta Patches (*.delta)")[0])
 
         Atlas.generateDeltaFile(mode, list(self.atlases.values()), None, file_path, output)

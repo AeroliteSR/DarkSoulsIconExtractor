@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, QDialogButtonBox, QButtonGroup, QRadioButton,
-QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout, QGridLayout, QProgressDialog)
-from PySide6.QtCore import Qt, QPropertyAnimation, QRect, QPoint, QTimer
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QCheckBox, QDialog, QLabel, QPushButton, QMessageBox, QLineEdit, QComboBox, 
+QDialogButtonBox, QButtonGroup, QRadioButton, QTreeWidget, QTreeWidgetItem, QStyledItemDelegate, QGraphicsView, QGraphicsScene, QListWidget, 
+QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormLayout, QGridLayout, QProgressDialog)
+from PySide6.QtCore import Qt, QPropertyAnimation, QRect, QPoint, QTimer, QSignalBlocker
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment, QImage
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP, SubtexturePrefix
 from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
@@ -674,6 +675,102 @@ class CreateDeltaPrompt(QDialog):
                 Path(self.source_lyt_input.text().strip()),
                 Path(self.vanilla_input.text().strip()),
                 Path(self.vanilla_lyt_input.text().strip()))
+
+class SubtextureSelectorWindow(QDialog):
+    def __init__(self, title, atlases: dict[str, object], parent=None): # obj is Atlas, not annotated due to circular import
+        super().__init__(parent=parent)
+        self.atlases = atlases
+
+        self.setWindowTitle(title)
+        self.setGeometry(500, 400, 500, 400)
+        
+        layout = QVBoxLayout(self)
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Name"])
+        self.tree.itemChanged.connect(self.onItemChanged)
+
+        for name, atlas in self.atlases.items():
+            if not atlas.subtextures:
+                continue
+
+            parent_item = self.createItem(self.tree, [name])
+
+            for sub in atlas.allSubs():
+                self.createItem(parent_item, [sub.name])
+
+        selectall = QPushButton("Select All")
+        selectall.clicked.connect(self.selectAll)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout.addWidget(self.tree)
+        layout.addWidget(selectall)
+        layout.addWidget(buttons)
+
+        self.tree.show()
+
+    def createItem(self, parent, text: list) -> QTreeWidgetItem:
+        item = QTreeWidgetItem(parent, text)
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        item.setCheckState(0, Qt.CheckState.Unchecked)
+
+        return item
+
+    def selectAll(self):
+        for i in range(self.tree.topLevelItemCount()):
+            self.tree.topLevelItem(i).setCheckState(0, Qt.CheckState.Checked)
+
+    def onItemChanged(self, item, column):
+        if item.parent() is None:
+            state = item.checkState(column)
+
+            blocker = QSignalBlocker(self.tree)
+
+            for i in range(item.childCount()):
+                child = item.child(i)
+                child.setCheckState(column, state)
+
+    def getSelected(self):
+        from DSTextureStudio.Dataclasses import Atlas
+
+        selected = []
+
+        for idx in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(idx)
+
+            if item.checkState(0) == Qt.CheckState.Checked: # entire atlas checked
+                children = [item.child(i).text(0) for i in range(item.childCount())]
+
+            else: # individually checked sub items
+                children = []
+
+                for i in range(item.childCount()):
+                    child = item.child(i)
+
+                    if child.checkState(0) == Qt.CheckState.Checked:
+                        children.append(child.text(0))
+
+            if not children:
+                continue
+
+            original = self.atlases[item.text(0)]
+            atlas = Atlas(
+                    name=original.name,
+                    parent=original.parent,
+                    texture=original.compileTexture(),
+            )
+
+            for child in children:
+                sub = original.fetch(child)
+                if sub is not None:
+                    atlas.add(sub)
+
+            selected.append(atlas)
+
+        return selected
 
 class ImageLabel(QLabel):
     def __init__(self, text, fetchimg, parent=None):

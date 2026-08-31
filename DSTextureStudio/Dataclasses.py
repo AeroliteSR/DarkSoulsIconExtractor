@@ -245,6 +245,10 @@ class Atlas:
             return True
         return False
 
+    def empty(self):
+        self.subtextures.clear()
+        self.clearChanges()
+        
     def clearChanges(self):
         """Clears all changes."""
         self.additions.clear()
