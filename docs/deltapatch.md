@@ -18,4 +18,8 @@ You will be prompted for a vanilla layout file (.sblytbnd.dcx). DSTS then compar
   
 Notes:
  - This option only finds subtextures that are entirely original to the modded file. Icon replacements are not accounted for.
+
+### Create Delta from custom selection:
+Opens a window with a tree list of all loaded subtextures. All subtextures you select are then added to the delta file.  
+This is currently the only way to export replacements from external files that aren't your own.  
   
