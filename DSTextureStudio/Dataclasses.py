@@ -265,7 +265,7 @@ class Atlas:
             all_subs += self.subtextures
 
         sub_map = {i.name: i for i in all_subs}
-        sub_map.update({i.name: i for i in self.replacements if isinstance(i, Atlas)})
+        sub_map.update({i.name: i for i in self.replacements if isinstance(i, SubTexture)})
 
         return list(sub_map.values())
 
@@ -313,13 +313,13 @@ class Atlas:
 
     def update(self, atlas: Atlas):
         """Update self modifications against another Atlas object by finding diffs."""
-        for sub in atlas.subtextures:
+        for sub in atlas.allSubs():
             if self.match(sub.name)[0] is None: # is unique to updater/delta; addition
                 target = self.additions
             else:
                 target = self.replacements
 
-            existing = next((idx for idx,a in enumerate(target) if a.name==sub.name), None)
+            existing = next((idx for idx,s in enumerate(target) if isinstance(s, SubTexture) and s.name==sub.name), None)
             if existing is not None:
                 target.pop(existing)
 
