@@ -229,6 +229,10 @@ class Atlas:
             "Replacements": self.replacements
         }
 
+    @property
+    def isAtlas(self) -> bool:
+        return bool(self.subtextures)
+    
     # region Helpers
     def rename(self, new_name) -> bool:
         """Renames Atlas object. Returns True if successful"""

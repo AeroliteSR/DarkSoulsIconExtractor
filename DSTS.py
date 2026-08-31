@@ -168,7 +168,7 @@ class TextureStudio(QMainWindow):
         self.file_menu.addAction(createAction("Open File", lambda: self.openDcxDialog(dirmode=False)))
         self.file_menu.addAction(createAction("Open Directory", lambda: self.openDcxDialog(dirmode=True)))
         self.file_menu.addSeparator()
-        self.file_menu.addAction(createAction("Save All", lambda: self.applyChanges(task=WriteTask.All)))
+        self.file_menu.addAction(createAction("Save All", lambda: self.applyChanges(task=WriteTask.ALL)))
         self.file_menu.addAction(createAction("Save TPF", lambda: self.applyChanges(task=WriteTask.TPF)))
         self.file_menu.addAction(createAction("Save Layout", lambda: self.applyChanges(task=WriteTask.LYT)))
         self.file_menu.addSeparator()
@@ -355,7 +355,11 @@ class TextureStudio(QMainWindow):
                 continue
 
             existing = self.atlases[atlas.name]
-            existing.update(atlas)
+
+            if atlas.isAtlas: # Atlas (duh)
+                existing.update(atlas)
+            else: # childless Texture type; replace entire texture
+                existing.replacements.append(atlas.texture)
 
         self.atlas_list.setCurrentRow(0)
         self.showAtlas(self.atlas_list.currentItem())

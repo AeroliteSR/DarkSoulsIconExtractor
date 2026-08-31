@@ -693,8 +693,6 @@ class SubtextureSelectorWindow(QDialog):
         self.tree.itemChanged.connect(self.onItemChanged)
 
         for name, atlas in self.atlases.items():
-            if not atlas.subtextures:
-                continue
 
             parent_item = self.createItem(self.tree, [name])
 
@@ -745,6 +743,15 @@ class SubtextureSelectorWindow(QDialog):
 
             if item.checkState(0) == Qt.CheckState.Checked: # entire atlas checked
                 children = [item.child(i).text(0) for i in range(item.childCount())]
+
+                if not children: # is childless Texture
+                    original = self.atlases[item.text(0)]
+                    selected.append(Atlas(
+                            name=original.name,
+                            parent=original.parent,
+                            texture=original.compileTexture(),
+                    ))
+                    continue
 
             else: # individually checked sub items
                 children = []

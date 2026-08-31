@@ -138,7 +138,6 @@ class DCXType(Enum):
                 return cls.Unknown
 
             header_version_info = header.get_version_info()
-            print(header_version_info)
             for version_info, dcx_type in DCX_VINFO_TO_TYPE.items(): # modified in DSTS
                 if version_info is None:
                     continue
