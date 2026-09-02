@@ -57,8 +57,8 @@ def parseGameType(path) -> Game:
         game_type = 'des'
     if path_has_sequence(parts, ["steamapps", "common", "DARK SOULS REMASTERED"]):
         game_type = 'dsr'
-    elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II"]):
-        game_type = 'ds2'
+    #elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II"]):
+        #game_type = 'ds2'
     elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II Scholar of the First Sin"]):
         game_type = 'sotfs'
     elif path_has_sequence(parts, ["steamapps", "common", "DARK SOULS III"]):
