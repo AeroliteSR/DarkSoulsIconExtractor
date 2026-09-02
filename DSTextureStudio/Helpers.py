@@ -3,7 +3,7 @@ from io import BytesIO
 from pathlib import Path
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import QFileDialog
-from DSTextureStudio.Enums import Game
+from soulstruct.games import Game, get_game
 from DSTextureStudio.GUI import gameTypeDialog, RadioButtonDialog
 from DSTextureStudio.Utilities import path_has_sequence, checkBlockSize, align_up, tupleAdd
 import tempfile
@@ -54,25 +54,27 @@ def parseGameType(path) -> Game:
     parts = Path(path).parts
 
     if "PS3_GAME" in parts:
-        game_type = 'Demon\'s Souls'
+        game_type = 'des'
     if path_has_sequence(parts, ["steamapps", "common", "DARK SOULS REMASTERED"]):
-        game_type = 'Dark Souls 1'
+        game_type = 'dsr'
+    elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II"]):
+        game_type = 'ds2'
     elif path_has_sequence(parts, ["steamapps", "common", "Dark Souls II Scholar of the First Sin"]):
-        game_type = 'Dark Souls 2'
+        game_type = 'sotfs'
     elif path_has_sequence(parts, ["steamapps", "common", "DARK SOULS III"]):
-        game_type = 'Dark Souls 3'
+        game_type = 'ds3'
     elif path_has_sequence(parts, ["Bloodborne", "CUSA03173", "dvdroot_ps4"]):
-        game_type = 'Bloodborne'
+        game_type = 'bb'
     elif path_has_sequence(parts, ["steamapps", "common", "Sekiro"]):
-        game_type = 'Sekiro'
+        game_type = 'sdt'
     elif path_has_sequence(parts, ["steamapps", "common", "ARMORED CORE VI FIRES OF RUBICON"]):
-        game_type = "Armored Core 6"
+        game_type = "ac6"
     elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING NIGHTREIGN"]):
-        game_type = 'Nightreign'
+        game_type = 'nr'
     elif path_has_sequence(parts, ["steamapps", "common", "ELDEN RING"]):
-        game_type = 'Elden Ring'
+        game_type = 'er'
 
-    return Game(game_type)
+    return get_game(game_type)
 
 def createDebugGrid(image, subtextures):
     """Outputs a png with grid lines for debugging"""
@@ -107,7 +109,7 @@ def checkGame(path: str) -> Game:
     game = parseGameType(path=path)
     if game.name is None:
         game = gameTypeDialog()
-    return game
+    return game if game.name is not None else None
 
 def createBlankImage(dimensions: tuple) -> str:
     img = Image.new("RGBA", dimensions, (0, 0, 0, 0))

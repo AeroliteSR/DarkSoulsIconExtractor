@@ -6,14 +6,14 @@ from PIL import Image
 from pathlib import Path
 from io import BytesIO
 import struct
-from soulstruct.dcx import oodle
+from soulstruct.games import Game, NIGHTREIGN, ARMORED_CORE_6
+from soulstruct.dcx import oodle, DCXType
 from soulstruct.containers.tpf import TPFTexture, TPFPlatform, TPF
 from soulstruct.containers import Binder, BinderEntry, BinderVersion, BinderVersion4Info
 from soulstruct.base.textures.dds import DDS
 from soulstruct.base.textures.dds.swizzle import swizzle_dds_bytes_ps4
-from soulstruct.dcx import DCXType
 from DSTextureStudio.Utilities import path_has_sequence, findLast, tupleAdd
-from DSTextureStudio.Enums import ImageType, Game, Resolution, DeltaMode
+from DSTextureStudio.Enums import ImageType, Resolution, DeltaMode
 from DSTextureStudio.Helpers import cleanByAlpha
 import xml.etree.ElementTree as ET
 
@@ -158,13 +158,12 @@ class AtlasLayout:
     # region Helpers
 
     def getImagePath(game: Game, **kwargs):
-        match game.name:
-            case "Nightreign":
-                imgpath = r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
-            case "Armored Core 6":
-                imgpath = r"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
-            case _: # ER/SDT
-                imgpath = r"{atlas_name}.png"
+        if game == NIGHTREIGN:
+            imgpath = r"W:\CL\data\Target\INTERROOT_win64\menu\ScaleForm\Tif\01_Common\{res}\{atlas_name}.tif" 
+        if game == ARMORED_CORE_6:
+            imgpath = r"W:\FNR\data\Menu\ScaleForm\Tif\01_Common\{atlas_name}\{res}\exp\{atlas_name}.png"
+        else: # ER/SDT
+            imgpath = r"{atlas_name}.png"
 
         return imgpath.format(**kwargs)
 

@@ -1,16 +1,4 @@
-from soulstruct.dcx import DCXType
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT
-
-CompressionTypes = {
-    "Demon's Souls": DCXType.DCX_EDGE,
-    "Dark Souls 1": DCXType.DCX_DFLT_10000_24_9,
-    "Dark Souls 2": DCXType.Null,
-    "Dark Souls 3": DCXType.DCX_DFLT_10000_44_9,
-    "Bloodborne": DCXType.DCX_DFLT_10000_44_9,
-    "Sekiro": DCXType.DCX_KRAK,
-    "Elden Ring": DCXType.DCX_KRAK,
-    "Nightreign": DCXType.DCX_KRAK,
-}
 
 DXGI_STRUCT_MAP = { # copied from soulstruct, duplicates removed and reordered
     DXGI_FORMAT.BC7_UNORM: 102,

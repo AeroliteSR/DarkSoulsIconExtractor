@@ -4,7 +4,8 @@ QInputDialog, QSpinBox, QHBoxLayout, QMenu, QListWidgetItem, QFileDialog, QFormL
 from PySide6.QtCore import Qt, QPropertyAnimation, QRect, QPoint, QTimer, QSignalBlocker
 from PySide6.QtGui import QPalette, QPainter, QAction, QCursor, QColor, QGuiApplication, QBrush, QPixmap, QTextDocumentFragment, QImage
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP, SubtexturePrefix
-from DSTextureStudio.Enums import Game, ImageType, GameType, BackgroundMode
+from DSTextureStudio.Enums import ImageType, GameType, BackgroundMode
+from soulstruct.games import Game, get_game, GAMES
 from typing import Callable, Optional
 import re
 from pathlib import Path
@@ -535,8 +536,10 @@ class DefineSubtexturePrompt(QDialog):
         return f"{self.prefix_input.currentText()}{id}", hwcoords, xycoords, half
 
 class CompressionPrompt(QDialog):
-    def __init__(self, name):
+    def __init__(self, name, game: Game, show_enc = True):
         super().__init__()
+        self.show_enc = show_enc
+
         self.setWindowTitle("Prompt")
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
 
@@ -546,21 +549,24 @@ class CompressionPrompt(QDialog):
         self.compression_label.setToolTip("Set to Null to write uncompressed TPF")
         self.layout.addWidget(self.compression_label)
         self.format_input = QComboBox()
-        self.format_input.addItems([i.name for i in DCXType if i.name != "Unknown"])
+        default = game.default_dcx_type.name
+        self.format_input.addItems([default, *[i.name for i in DCXType if i.name not in ("Unknown", default, "Zlib")]])
         self.layout.addWidget(self.format_input)
 
-        self.encoding_input = QSpinBox()
-        self.encoding_input.setRange(0, 2)
-        self.encoding_input.setValue(2)
-        self.encoding_input.setToolTip("0/2 = shift_jis_2004; 1 = UTF-16")
+        if show_enc:
+            self.encoding_input = QSpinBox()
+            self.encoding_input.setRange(0, 2)
+            self.encoding_input.setValue(game.default_name_encoding)
+            self.encoding_input.setToolTip("0/2 = shift_jis_2004; 1 = UTF-16")
 
-        enc_layout = QHBoxLayout()
-        enc_layout.addWidget(QLabel("Encoding Type:"))
-        enc_layout.addWidget(self.encoding_input)
+            enc_layout = QHBoxLayout()
+            enc_layout.addWidget(QLabel("Encoding Type:"))
+            enc_layout.addWidget(self.encoding_input)
 
-        self.layout.addLayout(enc_layout)
+            self.layout.addLayout(enc_layout)
 
         self.reuse_checkbox = QCheckBox("Use for all exports")
+        self.reuse_checkbox.setChecked(True)
         self.layout.addWidget(self.reuse_checkbox)
 
         self.submit_button = QPushButton("Submit")
@@ -571,7 +577,9 @@ class CompressionPrompt(QDialog):
         self.submit_button.clicked.connect(self.accept)
 
     def get_result(self):
-        return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
+        if self.show_enc:
+            return self.format_input.currentText(), self.encoding_input.value(), self.reuse_checkbox.isChecked()
+        return self.format_input.currentText(), self.reuse_checkbox.isChecked()
    
 class RadioButtonDialog(QDialog):
     def __init__(self, title, text, options: dict, default: int, parent=None):
@@ -1049,7 +1057,7 @@ class TextureListWidget(QListWidget):
 
     def showMenu(self):
         game = self.checkGame() # checkGame will never be None as showMenu is only used by subtexture_list
-        if game.type != GameType.MODERN:
+        if game.gametype != GameType.MODERN:
             self.add_option.trigger() # PS gametype will return append as well which skips having to select an option before it tells you that you cant
             return
 
@@ -1102,17 +1110,7 @@ def showSelectOptions(title, text, options):
     return ok, choice
 
 def gameTypeDialog() -> Game:
-    options = [
-        "Demon's Souls",
-        "Dark Souls 1",
-        "Dark Souls 2",
-        "Dark Souls 3",
-        "Bloodborne",
-        "Sekiro",
-        "Armored Core 6",
-        "Elden Ring",
-        "Nightreign"
-    ]
+    options = [i.name for i in GAMES]
 
     dialog = QDialog(None)
     dialog.setWindowTitle("Select Game Type")
@@ -1120,7 +1118,7 @@ def gameTypeDialog() -> Game:
 
     layout = QVBoxLayout(dialog)
 
-    label = QLabel("Choose one of the following:")
+    label = QLabel("Game could not be found automatically, please select it.")
     combo = QComboBox()
     combo.setStyleSheet("""QComboBox {padding: 3px 0px 3px 6px;}""")
     combo.addItems(options)
@@ -1139,9 +1137,9 @@ def gameTypeDialog() -> Game:
     result = dialog.exec()
 
     if result == QDialog.Accepted:
-        return Game(combo.currentText())
+        return get_game(combo.currentText())
 
-    return Game(None)
+    return get_game(None)
 
 def getOutputPath() -> Path:
     folder = QFileDialog.getExistingDirectory(

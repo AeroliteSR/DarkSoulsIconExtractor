@@ -1,5 +1,5 @@
 {        
-    "Sekiro": {
+    "Sekiro: Shadows Die Twice": {
         "ItemIcon": {
             "1": "Spirit Emblem",
             "0": "Regenerative Power",
@@ -314,7 +314,7 @@
         }
     },
 
-    "Armored Core 6": {},
+    "Armored Core VI: Fires of Rubicon": {},
             
     "Elden Ring": {
         "ItemIcon": {
@@ -3051,7 +3051,7 @@
         }
     },
 
-    "Nightreign": {
+    "Elden Ring: Nightreign": {
         "ItemIcon": {
             "18000": "Crimson Amber Medallion",
             "18010": "Cerulean Amber Medallion",

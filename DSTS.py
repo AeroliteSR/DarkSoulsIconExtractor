@@ -17,10 +17,11 @@ from PySide6.QtCore import Qt, QThread, QUrl, QPoint, QTimer, QSize, Signal
 from soulstruct.dcx import oodle
 from soulstruct.containers.tpf import TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT, TPFTexture, TPFPlatform
 from soulstruct.base.textures.dds.enums import DXGI_FORMAT_BPP, DXGI_FORMAT
+from soulstruct.games import get_game, DEMONS_SOULS, DARK_SOULS_2, DARK_SOULS_2_SOTFS, BLOODBORNE, SEKIRO, ELDEN_RING, ARMORED_CORE_6, NIGHTREIGN
 # DSTS
 from DSTextureStudio.GameInfo import DXGI_STRUCT_MAP
 from DSTextureStudio.Dataclasses import Atlas, SubTexture
-from DSTextureStudio.Enums import Game, ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode, WriteTask
+from DSTextureStudio.Enums import ImageType, IconMode, ExportMode, Resolution, Modified, GameType, DeltaMode, WriteTask
 from DSTextureStudio.Helpers import checkGame, getFreeSpace, createBlankImage, createDebugGrid, getPngSize, validateImageForSwizzle
 from DSTextureStudio.Workers import LoadWorker, WriteWorker, ExtractWorker
 from DSTextureStudio.GUI import (Delegate, ExpandableLabel, Palettes, TextureListWidget, TextureNamePrompt, DefineSubtexturePrompt, ImageLabel,
@@ -51,7 +52,7 @@ class TextureStudio(QMainWindow):
         self.current_atlas = None
         self.thumbnail_cache = {}
         self.pending_new_atlases = []
-        self.game = Game(None)
+        self.game = get_game(None)
 
         self.console = ConsoleWindow(self, emitter=log_emitter)
         self.console.set_objects(
@@ -141,6 +142,7 @@ class TextureStudio(QMainWindow):
         layout.addWidget(splitter)
         self.setCentralWidget(container)
 
+    # region GUI
     def hasPendingChanges(self):
         return bool(self.pending_new_atlases or any(a.modified for a in self.atlases.values()))
 
@@ -274,10 +276,11 @@ class TextureStudio(QMainWindow):
         self.showAtlas(self.atlas_list.currentItem())
         self.reloadHighlighting()
 
+    # region Actions
     def createDelta(self):
         self.checkOodleDLL()
 
-        if self.game.type != GameType.MODERN:
+        if self.game.gametype != GameType.MODERN:
             showError("This feature is only for modern games for now. Sorry!")
             return
 
@@ -591,9 +594,12 @@ class TextureStudio(QMainWindow):
             if answer != QMessageBox.Yes:
                 return
             self.checkOodleDLL()
-            self.game = Game("Dark Souls 2")
+            self.game = get_game("ds2sotfs")
                 
-        if self.game.name != "Dark Souls 2": # doesn't need a parent as it writes to a standalone tpf
+        if self.game in [DARK_SOULS_2, DARK_SOULS_2_SOTFS]: # doesn't need a parent as it writes to a standalone tpf
+            parent = None
+
+        else:
             files = list(self.LOADED_DCX_FILES.keys())
             if len(files) > 1:
                 ok, parent = showSelectOptions("Select parent file", "Files:", files)
@@ -602,8 +608,6 @@ class TextureStudio(QMainWindow):
                 parent = Path(parent)
             else:
                 parent = files[0]
-        else:
-            parent = "None"
 
         dialog = TextureNamePrompt(mode=ImageType.Texture)
         if not dialog.exec():
@@ -628,43 +632,42 @@ class TextureStudio(QMainWindow):
             showError("A texture of this name already exists!")
             return
 
-        match self.game.name:
-            case 'Bloodborne':
-                img = validateImageForSwizzle(Image.open(img_path))
-                if img is None:
-                    return
-                
-                w,h = img.size
-
-                with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                    img_path = tmp.name
-                    img.save(tmp.name)
-
-                platform = TPFPlatform.PS4
-                consoleinfo = TPFTexture.ConsoleInfo(
-                    width=w,
-                    height=h,
-                    texture_count=1,
-                    unk2=13,
-                    dxgi_format=DXGI_FORMAT[_format]
-                )
+        if self.game == BLOODBORNE:
+            img = validateImageForSwizzle(Image.open(img_path))
+            if img is None:
+                return
             
-            case "Demon's Souls":
-                img = Image.open(img_path)
-                w,h = img.size
-                platform = TPFPlatform.PC
-                consoleinfo = TPFTexture.ConsoleInfo(
-                    width=w,
-                    height=h,
-                    texture_count=1,
-                    unk2=13,
-                    dxgi_format=DXGI_FORMAT[_format]
-                )
+            w,h = img.size
 
-            case _:
-                img = Image.open(img_path)
-                platform = TPFPlatform.PC
-                consoleinfo = None
+            with NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                img_path = tmp.name
+                img.save(tmp.name)
+
+            platform = TPFPlatform.PS4
+            consoleinfo = TPFTexture.ConsoleInfo(
+                width=w,
+                height=h,
+                texture_count=1,
+                unk2=13,
+                dxgi_format=DXGI_FORMAT[_format]
+            )
+            
+        elif self.game == DEMONS_SOULS:
+            img = Image.open(img_path)
+            w,h = img.size
+            platform = TPFPlatform.PC
+            consoleinfo = TPFTexture.ConsoleInfo(
+                width=w,
+                height=h,
+                texture_count=1,
+                unk2=13,
+                dxgi_format=DXGI_FORMAT[_format]
+            )
+
+        else:
+            img = Image.open(img_path)
+            platform = TPFPlatform.PC
+            consoleinfo = None
 
         blank = TPFTexture(stem=name, mipmap_count=1, format=DXGI_STRUCT_MAP[DXGI_FORMAT[_format]], platform=platform, console_info=consoleinfo)
         blank.replace_dds(img_path, dds_format=_format)
@@ -690,7 +693,7 @@ class TextureStudio(QMainWindow):
         self.showAtlas(self.atlas_list.currentItem())
 
     def addIcon(self, mode: IconMode = IconMode.Append):
-        if self.game.name == "Dark Souls 2": # no point adding a subtexture to a single icon
+        if self.game in [DARK_SOULS_2, DARK_SOULS_2_SOTFS]: # no point adding a subtexture to a single icon
             showError("If you're trying to add icons for DS2, see:<br><a href='https://darksoulstexturestudio.readthedocs.io/en/latest/custom-files/'>Docs</a>", _type=QMessageBox.Information)
             return
         
@@ -707,7 +710,7 @@ class TextureStudio(QMainWindow):
         atlas_obj = self.atlases.get(atlas_name)
         subs = atlas_obj.subtextures
 
-        if self.game.type != GameType.MODERN and len(subs) == 0:
+        if self.game.gametype != GameType.MODERN and len(subs) == 0:
             showError("Sorry, this atlas isn't mapped yet!<br>Consider mapping them yourself in Dimensions.json :D")
             return
         
@@ -741,7 +744,7 @@ class TextureStudio(QMainWindow):
                 else:
                     w, h = img.size
 
-                if self.game.name == "Bloodborne": # check for valid img size
+                if self.game == BLOODBORNE: # check for valid img size
                     img = validateImageForSwizzle(img, atlas_img.size, (padding, padding))
                     if img is None:
                         return
@@ -804,7 +807,7 @@ class TextureStudio(QMainWindow):
         self.current_atlas = None
         self.thumbnail_cache = {}
         self.pending_new_atlases = []
-        self.game = Game(None)
+        self.game = get_game(None)
         self.preview_label.setText("Texture Preview")
         self.info_label.setText(("Texture Info", "Texture Info"))
         return True
@@ -878,7 +881,7 @@ class TextureStudio(QMainWindow):
         self.game = game
 
         file_mappings = []
-        if self.game.name == 'Nightreign':
+        if self.game == NIGHTREIGN:
             if not dirmode:
                 files += [f for f in file_path.parent.glob("*.sblytbnd.dcx")]
 
@@ -941,7 +944,7 @@ class TextureStudio(QMainWindow):
 
             file_mappings.extend(standalone) # no layout
 
-        elif self.game.name in ['Sekiro', 'Armored Core 6', 'Elden Ring']:
+        elif self.game in [SEKIRO, ARMORED_CORE_6, ELDEN_RING]:
             for f in files:
                 if 'sblytbnd' in str(f):
                     continue
@@ -1088,7 +1091,7 @@ class TextureStudio(QMainWindow):
                     for idx in range(self.atlas_list.count()):
                         item = self.atlas_list.item(idx)
                         text = item.text()
-                        if self.game.name == 'Dark Souls 2': # special handling due to weird naming system
+                        if self.game in [DARK_SOULS_2, DARK_SOULS_2_SOTFS]: # special handling due to weird naming system
                             text = text[text.rfind('_')+1:]
 
                         name = ATLASNAMES.get(self.game.name, {}).get(text, None) or item.text()
@@ -1211,7 +1214,7 @@ class TextureStudio(QMainWindow):
 
     def registerReplacement(self):
         """Prompt the user for an image, then add it to the replacement queue with the currently selected texture as the target."""
-        if self.game.type is None:
+        if self.game.gametype is None:
             showError("No files loaded!")
         
         atlas = self.atlas_list.currentItem()
@@ -1246,7 +1249,7 @@ class TextureStudio(QMainWindow):
 
         self.r_thread = QThread()
         self.r_worker = WriteWorker(self.atlases, self.pending_new_atlases,self.LOADED_DCX_FILES, self.LAYOUT_DATA, 
-                                    self.alphaThreshold,  self.game, output_dir, task)
+                                    self.alphaThreshold, self.game, output_dir, task)
         self.r_worker.moveToThread(self.r_thread)
         self.r_thread.started.connect(self.r_worker.run)
 
@@ -1258,8 +1261,8 @@ class TextureStudio(QMainWindow):
         
         self.r_thread.start()
 
-    def showCompressionDialog(self, name):
-        dialog = CompressionPrompt(name)
+    def showCompressionDialog(self, name, show_enc=True):
+        dialog = CompressionPrompt(name, self.game, show_enc=show_enc)
         dialog.exec()
         self.r_worker._result = dialog.get_result()
         self.r_worker._event.set()
@@ -1273,6 +1276,7 @@ class TextureStudio(QMainWindow):
         else:
             showError(msg)
 
+    # region Image Handling
     def formatImageInfo(self, name, file, pil_img, coords='None', img_type: ImageType = ImageType.Atlas):
         """Properly format information about the selected preview to display."""
         def formatSize(bytes_val):

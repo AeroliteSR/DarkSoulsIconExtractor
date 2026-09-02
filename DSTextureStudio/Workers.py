@@ -13,9 +13,10 @@ from PySide6.QtCore import QObject, Signal
 # Soulstruct
 from soulstruct.containers.tpf import TPF, TPFPlatform, TPFTexture, TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT
 from soulstruct.dcx import core, oodle
+from soulstruct.games import Game, get_game, BLOODBORNE, NIGHTREIGN, DEMONS_SOULS
 # Custom
 from DSTextureStudio.Dataclasses import AtlasLayout, Atlas, SubTexture
-from DSTextureStudio.Enums import ExportMode, Game, GameType, WriteTask
+from DSTextureStudio.Enums import ExportMode, GameType, WriteTask
 from DSTextureStudio.Helpers import createDebugGrid
 from DSTextureStudio.log_utils import format_exc_clean
 from DSTextureStudio.Utilities import replaceTerms, loadJson
@@ -36,7 +37,7 @@ class LoadWorker(QObject):
     def run(self):
         try:
             logger.info("Beginning unpack for: %s", self.game)
-            match self.game.type:
+            match self.game.gametype:
                 case GameType.MODERN:
                     self.processModern()
 
@@ -51,7 +52,7 @@ class LoadWorker(QObject):
 
     def handleUnpack(self, path):
         oodle.LOAD_DLL()
-        if self.game.type == GameType.PS:
+        if self.game.gametype == GameType.PS:
             try:
                 tex,_ = core.decompress(path)
                 tpfdcx = TPF.from_bytes(tex)
@@ -63,13 +64,12 @@ class LoadWorker(QObject):
         self.LOADED_DCX_FILES[path] = tpfdcx
 
         for texture in tpfdcx.textures:
-            if self.game.type == GameType.PS:
+            if self.game.gametype == GameType.PS:
                 logger.debug("PS format detected. Creating headerized dds for TPFTexture: %s", texture.stem)
-                match self.game.name:
-                    case "Bloodborne":
-                        platform = TPFPlatform.PS4
-                    case "Demon's Souls":
-                        platform = TPFPlatform.PC
+                if self.game == BLOODBORNE:
+                    platform = TPFPlatform.PS4
+                elif self.game == DEMONS_SOULS:
+                    platform = TPFPlatform.PC
 
                 dds_data = texture.get_headerized_data(platform)
 
@@ -271,7 +271,7 @@ class ExtractWorker(QObject):
         self.finished.emit(True, self.output_dir)
 
 class WriteWorker(QObject):
-    requestCompression = Signal(str) # file name
+    requestCompression = Signal(str, bool) # file name, show encoding prompt
     finished = Signal(bool, str, Path)  # success, message, output location
 
     def __init__(self, atlases, new_atlases, loaded_files, layouts, alphaThreshold, game, output, task):
@@ -288,29 +288,33 @@ class WriteWorker(QObject):
         self.output_dir = output
         self.task = task
 
-    def promptCompression(self, name):
+    def promptCompression(self, name, show_enc=True):
         self._event.clear()
-        self.requestCompression.emit(name)
+        self.requestCompression.emit(name, show_enc)
         self._event.wait()
         return self._result
 
     def handle_new_atlases(self):
-        is_reuse = False
         tasks = []
+        dcx_type = self.game.default_dcx_type
+        enc = self.game.default_name_encoding
+        is_reuse = False
 
         for atlas in self.new_atlases:
-            if atlas.parent == None:
-                dcx_type = core.DCXType["Null"]
-                
-                if not is_reuse:
-                    _type, enc, reuse = self.promptCompression(atlas.name)
-                    dcx_type = core.DCXType[_type]
-                    is_reuse = reuse
-                        
-                atlas.writetpf(self.output_dir, dcx_type=dcx_type, encoding=enc)
-
-            else:
+            if atlas.parent is not None:
                 tasks.append(atlas)
+                continue
+
+            if not is_reuse:
+                _type, enc, is_reuse = self.promptCompression(atlas.name)
+                dcx_type = core.DCXType[_type]
+
+            logger.info("Writing standalone atlas: %s", self.output_dir / atlas.name)
+            atlas.writetpf(
+                self.output_dir,
+                dcx_type=dcx_type,
+                encoding=enc,
+            )
 
         return tasks
 
@@ -344,7 +348,7 @@ class WriteWorker(QObject):
                     imgpath = AtlasLayout.getImagePath(self.game, res=first_obj.res.display, atlas_name=atlas.name)
                     entry_path = first_obj.commonPath / f"{atlas.name}.layout"
                     dims = None
-                    if self.game.name == "Nightreign": # NR keeps width and height info in each .layout file's root
+                    if self.game == NIGHTREIGN: # NR keeps width and height info in each .layout file's root
                         dims = self.atlases[atlas.name].dimensions
 
                     new_layout = AtlasLayout.create(
@@ -365,13 +369,26 @@ class WriteWorker(QObject):
             logger.info("Successfully wrote file: %s", file)
 
     def processTextures(self):
+        dcx_type = None
+        is_reuse = False
+
+        new_atlases = self.handle_new_atlases()
+
         for base_path, data in self.LOADED_DCX_FILES.items():
+
+            if not is_reuse:
+                _type, is_reuse = self.promptCompression(base_path.name, show_enc=False)
+                dcx_type = core.DCXType[_type]
+
             base: TPF = deepcopy(data)
-            for atlas in self.handle_new_atlases(): # returns list of those with parents. Parentless files are written alone, not in a binder.
+            if dcx_type is not None:
+                base.dcx_type = dcx_type
+
+            for atlas in new_atlases: # returns list of those with parents. Parentless files are written alone, not in a binder.
                 if atlas.parent != base_path:
                     continue
 
-                atlas.add_to_TPF(base, swizzle=(self.game.name == "Bloodborne"))
+                atlas.add_to_TPF(base, swizzle=(self.game == BLOODBORNE))
 
             for atlas in self.atlases.values():
                 if (atlas.parent != base_path) or (not atlas.modified):
@@ -386,7 +403,7 @@ class WriteWorker(QObject):
                     texture = base.find_texture_stem(atlas.name)
                     texture.replace_dds(temp_path,
                         dds_format=TPF_TEXTURE_FORMAT_TO_DXGI_FORMAT[texture.format].name,
-                        swizzle=(self.game.name == "Bloodborne"),
+                        swizzle=(self.game == BLOODBORNE),
                         dimensions=compiled_image.size,
                     )
                 finally:

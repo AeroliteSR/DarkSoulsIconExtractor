@@ -24,29 +24,6 @@ class IconMode(Enum):
     Define = auto()
     Append = auto()
 
-class Game():
-    LEGACY_GAMES = {"Dark Souls 1", "Dark Souls 2", "Dark Souls 3"}
-    PS_GAMES = {"Bloodborne", "Demon's Souls"}
-
-    def __init__(self, name: str):
-        self.name = name
-        self.type = self.classify(name)
-
-    def classify(self, name: str | None) -> GameType | None:
-        if name is None:
-            return None
-
-        if name in self.LEGACY_GAMES:
-            return GameType.LEGACY
-        elif name in self.PS_GAMES:
-            return GameType.PS
-        else:
-            return GameType.MODERN
-
-    def __repr__(self):
-        type_name = self.type.name if self.type else None
-        return f"Game({self.name}, {type_name})"
-
 class Resolution(Enum):
     HI = auto()
     HIGH = auto()
